@@ -611,6 +611,7 @@ func rewriteEndpointIsLoopback(endpoint, provider string) bool {
 func newFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	setLocalizedFlagUsage(fs, name)
 	return fs
 }
 
@@ -752,7 +753,10 @@ func writeRewriteOutput(inputName string, data []byte, requested string, inPlace
 	if jsonStats || os.Getenv("AIWR_REWRITE_JSON") == "1" {
 		writeJSON(metadata)
 	} else {
-		fmt.Fprintf(os.Stderr, "%s -> %s: rewritten (%d bytes)\n", inputName, output, len(data))
+		fmt.Fprintf(os.Stderr, "%s\n", cliText(
+			fmt.Sprintf("%s -> %s: rewritten (%d bytes)", inputName, output, len(data)),
+			fmt.Sprintf("%s → %s：已重写（%d 字节）", inputName, output, len(data)),
+		))
 	}
 	return 0
 }

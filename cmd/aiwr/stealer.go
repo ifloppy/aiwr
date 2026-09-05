@@ -16,7 +16,7 @@ import (
 	"github.com/iruanp/aiwr/internal/stealer"
 )
 
-const stealerUsage = `aiwr stealer - black-box watermark stealing helpers
+const stealerUsageEnglish = `aiwr stealer - black-box watermark stealing helpers
 
 Usage:
   aiwr stealer query [options]
@@ -28,9 +28,21 @@ The query step is offline by default (dry-run). The openai-compatible backend
 requires an explicit remote opt-in; build and detect are model-free.
 `
 
+const stealerUsageChinese = `aiwr stealer - 黑盒水印研究辅助工具
+
+用法：
+  aiwr stealer query [选项]
+  aiwr stealer build [选项]
+  aiwr stealer detect [选项]
+  aiwr download-prompts [选项]
+
+query 默认离线运行（dry-run）。openai-compatible 后端需要显式允许远程
+访问；build 和 detect 不依赖模型。
+`
+
 func runStealer(args []string) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprint(os.Stderr, stealerUsage)
+		fmt.Fprint(os.Stderr, localizedStealerUsage())
 		if len(args) == 0 {
 			return 2
 		}
@@ -44,7 +56,7 @@ func runStealer(args []string) int {
 	case "detect":
 		return runStealerDetect(args[1:])
 	default:
-		return cliError(fmt.Errorf("unknown stealer command %q\n\n%s", args[0], stealerUsage))
+		return cliError(fmt.Errorf("unknown stealer command %q\n\n%s", args[0], localizedStealerUsage()))
 	}
 }
 
@@ -84,7 +96,7 @@ func runStealerQuery(args []string) int {
 	err := stealer.Query(stealer.QueryOptions{
 		Prompts: prompts, Out: out, Backend: backend, BaseURL: baseURL, Model: model,
 		APIKey: apiKey, MaxNewTokens: maxNewTokens, Concurrency: concurrency,
-		AllowRemote: allowRemote, Progress: os.Stdout,
+		AllowRemote: allowRemote, Progress: localizedProgressWriter{writer: os.Stdout},
 	})
 	if err != nil {
 		return stealerOperationalError(err)
@@ -130,9 +142,12 @@ func runStealerBuild(args []string) int {
 			return stealerOperationalError(err)
 		}
 	}
-	fmt.Printf("building s* from %d watermarked replies, %d baseline replies\n", len(replies), len(baseline))
+	fmt.Printf("%s\n", cliText(
+		fmt.Sprintf("building s* from %d watermarked replies, %d baseline replies", len(replies), len(baseline)),
+		fmt.Sprintf("正在从 %d 条带水印回复和 %d 条基线回复构建 s*", len(replies), len(baseline)),
+	))
 	if len(baseline) == 0 {
-		fmt.Fprintln(os.Stderr, "  note: no baseline supplied -> unigram fallback only")
+		fmt.Fprintln(os.Stderr, cliText("  note: no baseline supplied -> unigram fallback only", "  注意：未提供基线，仅使用 unigram fallback"))
 	}
 	watermarkedCounts := stealer.CountNGrams(replies, contextLen)
 	baselineCounts := stealer.CountNGrams(baseline, contextLen)
@@ -149,7 +164,10 @@ func runStealerBuild(args []string) int {
 	if table, ok := built["scorer"].(map[string]any); ok {
 		contexts = len(table)
 	}
-	fmt.Printf("wrote %s (%d contexts, top-%d)\n", out, contexts, topK)
+	fmt.Printf("%s\n", cliText(
+		fmt.Sprintf("wrote %s (%d contexts, top-%d)", out, contexts, topK),
+		fmt.Sprintf("已写入 %s（%d 个上下文，top-%d）", out, contexts, topK),
+	))
 	return 0
 }
 
@@ -258,10 +276,10 @@ func runDownloadPrompts(args []string) int {
 	written, err := stealer.DownloadPrompts(stealer.DownloadOptions{
 		Dataset: dataset, Config: config, Split: split, Count: count, Field: field,
 		Out: out, BaseURL: baseURL, Delay: delay, MinChars: minChars, MaxChars: maxChars,
-		Offset: offset, StartOver: startOver, Context: ctx, Progress: os.Stdout,
+		Offset: offset, StartOver: startOver, Context: ctx, Progress: localizedProgressWriter{writer: os.Stdout},
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: %v\n", err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s\n", localizedError(err))
 		if errors.Is(err, stealer.ErrInterrupted) {
 			return 130
 		}
@@ -287,7 +305,7 @@ func stealerEnvBool(name string) bool {
 
 func stealerOperationalError(err error) int {
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: %v\n", err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s\n", localizedError(err))
 	}
 	return 1
 }

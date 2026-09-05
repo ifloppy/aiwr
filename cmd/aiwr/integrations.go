@@ -37,16 +37,19 @@ func runCheckStaged(args []string) int {
 			if err == nil {
 				err = errors.New("not a regular file")
 			}
-			fmt.Fprintf(os.Stderr, "not a file: %s\n", path)
+			fmt.Fprintf(os.Stderr, "%s：%s\n", cliText("not a file", "不是文件"), path)
 			return 2
 		}
 		if st.Size() > core.MaxInputBytes() {
-			fmt.Fprintf(os.Stderr, "skipping %s: larger than %d bytes\n", path, core.MaxInputBytes())
+			fmt.Fprintf(os.Stderr, "%s\n", cliText(
+				fmt.Sprintf("skipping %s: larger than %d bytes", path, core.MaxInputBytes()),
+				fmt.Sprintf("跳过 %s：大于 %d 字节", path, core.MaxInputBytes()),
+			))
 			continue
 		}
 		report, inspectErr := core.InspectFile(path, opts)
 		if inspectErr != nil {
-			fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, inspectErr)
+			fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(inspectErr))
 			return 2
 		}
 		if report.Kind == core.KindUnknown {
@@ -60,7 +63,10 @@ func runCheckStaged(args []string) int {
 	if len(actionable) == 0 {
 		return 0
 	}
-	fmt.Fprintf(os.Stderr, "aiwr: %d file(s) carry AI/C2PA provenance marks:\n", len(actionable))
+	fmt.Fprintf(os.Stderr, "%s\n", cliText(
+		fmt.Sprintf("aiwr: %d file(s) carry AI/C2PA provenance marks:", len(actionable)),
+		fmt.Sprintf("aiwr：%d 个文件包含 AI/C2PA 来源标记：", len(actionable)),
+	))
 	for _, item := range actionable {
 		fmt.Fprintf(os.Stderr, "  %v\n", item["path"])
 		if findings, ok := item["findings"].([]string); ok {
@@ -69,13 +75,13 @@ func runCheckStaged(args []string) int {
 			}
 		}
 		if value, _ := item["has_c2pa"].(bool); value {
-			fmt.Fprintln(os.Stderr, "    - C2PA manifest present")
+			fmt.Fprintln(os.Stderr, "    - "+cliText("C2PA manifest present", "存在 C2PA 清单"))
 		}
 		if value, _ := item["has_ai_metadata"].(bool); value {
-			fmt.Fprintln(os.Stderr, "    - AI-generator metadata present")
+			fmt.Fprintln(os.Stderr, "    - "+cliText("AI-generator metadata present", "存在 AI 生成器元数据"))
 		}
 	}
-	fmt.Fprintln(os.Stderr, "Run `aiwr clean-file <path> --in-place` (or use clean-staged) to strip these before committing.")
+	fmt.Fprintln(os.Stderr, cliText("Run `aiwr clean-file <path> --in-place` (or use clean-staged) to strip these before committing.", "提交前请运行 `aiwr clean-file <path> --in-place`（或使用 clean-staged）移除这些标记。"))
 	return 1
 }
 
@@ -107,11 +113,14 @@ func runCleanStaged(args []string) int {
 	for _, path := range paths {
 		st, err := os.Stat(path)
 		if err != nil || !st.Mode().IsRegular() {
-			fmt.Fprintf(os.Stderr, "not a file: %s\n", path)
+			fmt.Fprintf(os.Stderr, "%s：%s\n", cliText("not a file", "不是文件"), path)
 			continue
 		}
 		if st.Size() > core.MaxInputBytes() {
-			fmt.Fprintf(os.Stderr, "skipping %s: larger than %d bytes\n", path, core.MaxInputBytes())
+			fmt.Fprintf(os.Stderr, "%s\n", cliText(
+				fmt.Sprintf("skipping %s: larger than %d bytes", path, core.MaxInputBytes()),
+				fmt.Sprintf("跳过 %s：大于 %d 字节", path, core.MaxInputBytes()),
+			))
 			continue
 		}
 		kind, classifyErr := core.Classify(path)
@@ -148,24 +157,30 @@ func runCleanStaged(args []string) int {
 	}
 
 	if len(changedPaths) > 0 {
-		fmt.Fprintf(os.Stderr, "aiwr: cleaned %d file(s) in place:\n", len(changedPaths))
+		fmt.Fprintf(os.Stderr, "%s\n", cliText(
+			fmt.Sprintf("aiwr: cleaned %d file(s) in place:", len(changedPaths)),
+			fmt.Sprintf("aiwr：已原地清理 %d 个文件：", len(changedPaths)),
+		))
 		for _, path := range changedPaths {
 			fmt.Fprintf(os.Stderr, "  %s\n", path)
 		}
-		fmt.Fprintln(os.Stderr, "Review the changes and re-stage before committing.")
+		fmt.Fprintln(os.Stderr, cliText("Review the changes and re-stage before committing.", "提交前请检查变更并重新暂存。"))
 	}
 	if len(failures) > 0 {
-		fmt.Fprintf(os.Stderr, "aiwr: %d file(s) could not be cleaned:\n", len(failures))
+		fmt.Fprintf(os.Stderr, "%s\n", cliText(
+			fmt.Sprintf("aiwr: %d file(s) could not be cleaned:", len(failures)),
+			fmt.Sprintf("aiwr：%d 个文件无法清理：", len(failures)),
+		))
 		for _, path := range paths {
 			if detail, ok := failures[path]; ok {
 				fmt.Fprintf(os.Stderr, "  %s\n    - %s\n", path, detail)
 				bak := path + ".bak"
 				if _, err := os.Stat(bak); err == nil {
-					fmt.Fprintf(os.Stderr, "    - backup left behind: %s\n", bak)
+					fmt.Fprintf(os.Stderr, "    - %s：%s\n", cliText("backup left behind", "已保留备份"), bak)
 				}
 			}
 		}
-		fmt.Fprintln(os.Stderr, "Those files were not confirmed clean. Re-run the cleaner by hand.")
+		fmt.Fprintln(os.Stderr, cliText("Those files were not confirmed clean. Re-run the cleaner by hand.", "这些文件未确认清理干净，请手动重新运行清理命令。"))
 		return 3
 	}
 	if len(changedPaths) > 0 {
@@ -205,11 +220,11 @@ func runHookWrittenFile(args []string) int {
 
 	raw, err := io.ReadAll(io.LimitReader(os.Stdin, maxHookPayloadBytes+1))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook payload read failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s：%s\n", cliText("hook payload read failed", "hook payload 读取失败"), localizedError(err))
 		return 1
 	}
 	if int64(len(raw)) > maxHookPayloadBytes {
-		fmt.Fprintln(os.Stderr, "aiwr: hook payload is too large")
+		fmt.Fprintln(os.Stderr, "aiwr: "+cliText("hook payload is too large", "hook payload 过大"))
 		return 1
 	}
 	if len(bytes.TrimSpace(raw)) == 0 {
@@ -217,7 +232,7 @@ func runHookWrittenFile(args []string) int {
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook payload was not valid JSON: %v\n", err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s：%s\n", cliText("hook payload was not valid JSON", "hook payload 不是有效 JSON"), localizedError(err))
 		return 1
 	}
 	path, ok := hookTargetPath(payload)
@@ -243,7 +258,7 @@ func hookMode(requested string) string {
 		if value == "check" || value == "clean" {
 			return value
 		}
-		fmt.Fprintf(os.Stderr, "aiwr: unknown hook mode %q; using check\n", value)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %q；%s\n", cliText("unknown hook mode", "未知 hook 模式"), value, cliText("using check", "将使用 check"))
 		return "check"
 	}
 	return "check"
@@ -283,7 +298,7 @@ func hookTargetPath(payload map[string]any) (string, bool) {
 func hookCheck(path string) int {
 	report, err := core.InspectFile(path, core.DefaultOptions())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook failed on %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %s：%s\n", cliText("hook failed on", "hook 处理失败："), path, localizedError(err))
 		return 1
 	}
 	if report.Kind == core.KindUnknown {
@@ -308,24 +323,27 @@ func hookCheck(path string) int {
 		detail += "AI-generator metadata present"
 	}
 	hookEmit(fmt.Sprintf("aiwr: %s carries provenance marks (%s)", filepath.Base(path), detail), "")
-	fmt.Fprintf(os.Stderr, "aiwr: %s carries AI/C2PA provenance marks:\n", path)
+	fmt.Fprintf(os.Stderr, "%s\n", cliText(
+		fmt.Sprintf("aiwr: %s carries AI/C2PA provenance marks:", path),
+		fmt.Sprintf("aiwr：%s 包含 AI/C2PA 来源标记：", path),
+	))
 	for _, finding := range findings {
 		fmt.Fprintf(os.Stderr, "  - %s\n", finding)
 	}
-	fmt.Fprintln(os.Stderr, "Clean it with `aiwr clean-file <path> --in-place`, or set WATERMARKS_HOOK_MODE=clean.")
+	fmt.Fprintln(os.Stderr, cliText("Clean it with `aiwr clean-file <path> --in-place`, or set WATERMARKS_HOOK_MODE=clean.", "请使用 `aiwr clean-file <path> --in-place` 清理，或设置 WATERMARKS_HOOK_MODE=clean。"))
 	return 2
 }
 
 func hookClean(path string, mode os.FileMode) int {
 	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.aiwr-hook")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook failed on %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %s：%s\n", cliText("hook failed on", "hook 处理失败："), path, localizedError(err))
 		return 1
 	}
 	tempPath := temp.Name()
 	if err := temp.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		fmt.Fprintf(os.Stderr, "aiwr: hook failed on %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %s：%s\n", cliText("hook failed on", "hook 处理失败："), path, localizedError(err))
 		return 1
 	}
 	defer os.Remove(tempPath)
@@ -335,17 +353,17 @@ func hookClean(path string, mode os.FileMode) int {
 	opts.Quiet = true
 	result, err := core.CleanFile(path, opts)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook failed on %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %s：%s\n", cliText("hook failed on", "hook 处理失败："), path, localizedError(err))
 		return 1
 	}
 	cleaned, err := os.ReadFile(tempPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook failed on %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %s：%s\n", cliText("hook failed on", "hook 处理失败："), path, localizedError(err))
 		return 1
 	}
 	original, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook failed on %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %s：%s\n", cliText("hook failed on", "hook 处理失败："), path, localizedError(err))
 		return 1
 	}
 	residual := result.StillHasC2PA || result.StillHasAI
@@ -360,7 +378,7 @@ func hookClean(path string, mode os.FileMode) int {
 		return 0
 	}
 	if err := core.WriteFileAtomic(path, cleaned, mode); err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: hook failed on %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %s：%s\n", cliText("hook failed on", "hook 处理失败："), path, localizedError(err))
 		return 1
 	}
 	summary := hookDescribe(result)
@@ -387,7 +405,7 @@ func hookDescribe(result core.CleanResult) string {
 	if len(result.Actions) > 0 {
 		return strings.Join(result.Actions, "; ")
 	}
-	return "metadata stripped"
+	return cliText("metadata stripped", "元数据已清理")
 }
 
 func hookEmit(systemMessage, additionalContext string) {

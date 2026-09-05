@@ -129,8 +129,14 @@ func runAuditWebsite(args []string) int {
 	case "sarif":
 		writeJSON(makeAuditSARIF(report))
 	default:
-		fmt.Printf("Sitemap: %s\nURLs collected: %d\nURLs scanned: %d\nURLs failed: %d\n", sitemapURL, len(urls), len(files), len(failures))
-		fmt.Printf("By kind: %v\nWith C2PA: %v\nWith AI metadata: %v\nWith suspicious text: %v\nActionable files: %v\nFindings by confidence: %v\n", summary["by_kind"], summary["with_c2pa"], summary["with_ai_metadata"], summary["with_suspicious_text"], summary["actionable_files"], summary["findings_by_confidence"])
+		fmt.Printf("%s\n", cliText(
+			fmt.Sprintf("Sitemap: %s\nURLs collected: %d\nURLs scanned: %d\nURLs failed: %d", sitemapURL, len(urls), len(files), len(failures)),
+			fmt.Sprintf("Sitemap：%s\n已收集 URL：%d\n已扫描 URL：%d\n失败 URL：%d", sitemapURL, len(urls), len(files), len(failures)),
+		))
+		fmt.Printf("%s\n", cliText(
+			fmt.Sprintf("By kind: %v\nWith C2PA: %v\nWith AI metadata: %v\nWith suspicious text: %v\nActionable files: %v\nFindings by confidence: %v", summary["by_kind"], summary["with_c2pa"], summary["with_ai_metadata"], summary["with_suspicious_text"], summary["actionable_files"], summary["findings_by_confidence"]),
+			fmt.Sprintf("按类型：%v\n包含 C2PA：%v\n包含 AI 元数据：%v\n包含可疑文本：%v\n需处理文件：%v\n按置信度统计：%v", summary["by_kind"], summary["with_c2pa"], summary["with_ai_metadata"], summary["with_suspicious_text"], summary["actionable_files"], summary["findings_by_confidence"]),
+		))
 		for _, item := range files {
 			findings, _ := item["findings"].([]string)
 			confidence, _ := item["confidence"].([]string)
@@ -143,7 +149,7 @@ func runAuditWebsite(args []string) int {
 			}
 		}
 		for _, failure := range failures {
-			fmt.Printf("  [error] %v: %v\n", failure["url"], failure["error"])
+			fmt.Printf("  [%s] %v: %v\n", cliText("error", "错误"), failure["url"], localizedError(errors.New(fmt.Sprint(failure["error"]))))
 		}
 	}
 	if len(failures) > 0 {

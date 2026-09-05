@@ -18,7 +18,7 @@ import (
 	"github.com/iruanp/aiwr/internal/core"
 )
 
-const usage = `aiwr - inspect and remove AI watermark/provenance metadata
+const usageEnglish = `aiwr - inspect and remove AI watermark/provenance metadata
 
 Usage:
   aiwr clean [options] FILE...
@@ -46,6 +46,32 @@ relative names and subdirectories preserved. Use --in-place for a backup and
 in-place replacement, or --output/--output-dir to choose a destination.
 `
 
+const usageChinese = `aiwr - 检查并移除 AI 水印/来源元数据
+
+用法：
+  aiwr clean [选项] 文件...
+  aiwr inspect [选项] 文件...
+  aiwr detect [选项] 文件...
+  aiwr audit [选项] 目录|文件...
+  aiwr rewrite-text [选项] [文件]
+  aiwr stealer query|build|detect [选项]
+  aiwr download-prompts [选项]
+  aiwr serve [--host 主机] [--port 端口]
+
+也可以使用直接格式命令：
+  clean-file、inspect-file、clean-text、inspect-text、
+  clean-image、inspect-image、clean-audio、inspect-audio、
+  clean-video、inspect-video、score-stylometry、detect-gumbel、
+  score-synthid、detect-text-watermark、markdiffusion、clean-ctrlregen、
+  synthid-score-server、synthid-text-server、audit-website、check-staged、
+  clean-staged、hook-written-file、bench-synthid-text、stealer、
+  download-prompts
+
+默认会将文件写到源文件旁的 NAME.cleaned.EXT。目录会写到相邻的
+DIRECTORY.cleaned，并保留相对路径和子目录。使用 --in-place 原地替换
+并创建备份，或使用 --output/--output-dir 指定目标。
+`
+
 type parsedCLI struct {
 	opts        core.Options
 	paths       []string
@@ -63,15 +89,18 @@ func main() { os.Exit(run(os.Args[1:])) }
 
 func run(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(os.Stderr, localizedUsage())
 		return 2
 	}
 	switch args[0] {
 	case "help", "-h", "--help":
-		fmt.Print(usage)
+		fmt.Print(localizedUsage())
 		return 0
 	case "version", "--version", "-v":
-		fmt.Printf("aiwr %s (Go reimplementation of watermarks-remover)\n", core.Version)
+		fmt.Printf("%s\n", cliText(
+			fmt.Sprintf("aiwr %s (Go reimplementation of watermarks-remover)", core.Version),
+			fmt.Sprintf("aiwr %s（watermarks-remover 的 Go 重实现）", core.Version),
+		))
 		return 0
 	case "clean", "clean-file", "clean_file":
 		return runCleanMode(args[1:], "", "")
@@ -130,7 +159,7 @@ func run(args []string) int {
 	case "serve", "server":
 		return runServe(args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "aiwr: unknown command %q\n\n%s", args[0], usage)
+		fmt.Fprintf(os.Stderr, "aiwr: %s %q\n\n%s", cliText("unknown command", "未知命令"), args[0], localizedUsage())
 		return 2
 	}
 }
@@ -142,7 +171,7 @@ func parseCommon(command string, args []string, forced string) (parsedCLI, error
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	setLocalizedCommonUsage(fs, command)
 	fs.StringVar(&opts.Output, "o", "", "output file (default: NAME.cleaned.EXT)")
 	fs.StringVar(&opts.Output, "output", "", "output file")
 	fs.StringVar(&opts.OutputDir, "output-dir", "", "output directory for directory or multi-file input")
@@ -375,10 +404,20 @@ func bundledExternalScriptAvailable(scriptName string) bool {
 
 func printExternalHelp(scriptName string) {
 	command := strings.TrimSuffix(scriptName, ".py")
-	fmt.Fprintf(os.Stdout, "aiwr %s\n\n", strings.ReplaceAll(command, "_", "-"))
-	fmt.Fprintf(os.Stdout, "This command delegates to upstream %s.\n", scriptName)
-	fmt.Fprintln(os.Stdout, "Provide --upstream-scripts PATH (or set AIWR_UPSTREAM_SCRIPTS) to see and run the upstream command options.")
-	fmt.Fprintf(os.Stdout, "Usage: aiwr %s [--upstream-scripts PATH] [upstream options]\n", strings.ReplaceAll(command, "_", "-"))
+	name := strings.ReplaceAll(command, "_", "-")
+	fmt.Fprintf(os.Stdout, "aiwr %s\n\n", name)
+	fmt.Fprintln(os.Stdout, cliText(
+		fmt.Sprintf("This command delegates to upstream %s.", scriptName),
+		fmt.Sprintf("此命令委托给上游 %s。", scriptName),
+	))
+	fmt.Fprintln(os.Stdout, cliText(
+		"Provide --upstream-scripts PATH (or set AIWR_UPSTREAM_SCRIPTS) to see and run the upstream command options.",
+		"请提供 --upstream-scripts PATH（或设置 AIWR_UPSTREAM_SCRIPTS）以查看并运行上游命令选项。",
+	))
+	fmt.Fprintf(os.Stdout, "%s\n", cliText(
+		fmt.Sprintf("Usage: aiwr %s [--upstream-scripts PATH] [upstream options]", name),
+		fmt.Sprintf("用法：aiwr %s [--upstream-scripts PATH] [上游选项]", name),
+	))
 }
 
 // externalDirectoryAlias keeps aiwr's option names consistent across the
@@ -445,14 +484,14 @@ func runCleanMode(args []string, forced, mediaMode string) int {
 		if statErr != nil {
 			errorsCount++
 			if !parsed.opts.JSON {
-				fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, statErr)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(statErr))
 			}
 			continue
 		}
 		if st.IsDir() {
 			if len(parsed.paths) != 1 {
 				errorsCount++
-				fmt.Fprintf(os.Stderr, "aiwr: directory input must be processed alone: %s\n", path)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", cliText("directory input must be processed alone", "目录输入必须单独处理"), path)
 				continue
 			}
 			local := parsed.opts
@@ -462,13 +501,13 @@ func runCleanMode(args []string, forced, mediaMode string) int {
 			}
 			if local.InPlace {
 				errorsCount++
-				fmt.Fprintln(os.Stderr, "aiwr: --in-place is not supported for directory input; choose --output-dir")
+				fmt.Fprintf(os.Stderr, "aiwr: %s\n", cliText("--in-place is not supported for directory input; choose --output-dir", "目录输入不支持 --in-place；请选择 --output-dir"))
 				continue
 			}
 			summary, cleanErr := core.CleanDirectory(path, local)
 			if cleanErr != nil {
 				errorsCount++
-				fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, cleanErr)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(cleanErr))
 				continue
 			}
 			summaries = append(summaries, summary)
@@ -479,7 +518,10 @@ func runCleanMode(args []string, forced, mediaMode string) int {
 				}
 			}
 			if !parsed.opts.JSON && !parsed.opts.Quiet {
-				fmt.Fprintf(os.Stderr, "%s -> %s: %d files, %d changed, %d errors\n", summary.Input, summary.Output, summary.Files, summary.Changed, summary.Errors)
+				fmt.Fprintf(os.Stderr, "%s\n", cliText(
+					fmt.Sprintf("%s -> %s: %d files, %d changed, %d errors", summary.Input, summary.Output, summary.Files, summary.Changed, summary.Errors),
+					fmt.Sprintf("%s → %s：%d 个文件，%d 个已变化，%d 个错误", summary.Input, summary.Output, summary.Files, summary.Changed, summary.Errors),
+				))
 			}
 			continue
 		}
@@ -501,7 +543,7 @@ func runCleanMode(args []string, forced, mediaMode string) int {
 		if cleanErr != nil {
 			errorsCount++
 			if !parsed.opts.JSON {
-				fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, cleanErr)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(cleanErr))
 			}
 			continue
 		}
@@ -743,7 +785,7 @@ func runInspect(args []string, forced string) int {
 		if statErr != nil {
 			errorsCount++
 			if !parsed.opts.JSON {
-				fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, statErr)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(statErr))
 			}
 			continue
 		}
@@ -752,7 +794,7 @@ func runInspect(args []string, forced string) int {
 			if inspectErr != nil {
 				errorsCount++
 				if !parsed.opts.JSON {
-					fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, inspectErr)
+					fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(inspectErr))
 				}
 			}
 			reports = append(reports, batch...)
@@ -762,7 +804,7 @@ func runInspect(args []string, forced string) int {
 		if inspectErr != nil {
 			errorsCount++
 			if !parsed.opts.JSON {
-				fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, inspectErr)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(inspectErr))
 			}
 			continue
 		}
@@ -873,12 +915,15 @@ func runDetect(args []string) int {
 	} else {
 		for _, item := range items {
 			if item.Error != "" {
-				fmt.Fprintf(os.Stderr, "%s: %s\n", item.Path, item.Error)
+				fmt.Fprintf(os.Stderr, "%s: %s\n", item.Path, localizedError(errors.New(item.Error)))
 			} else {
-				fmt.Printf("%s: %s/%s%s\n", item.Path, item.Kind, item.Format, suspiciousSuffix(item.Suspicious))
+				fmt.Printf("%s\n", cliText(
+					fmt.Sprintf("%s: %s/%s%s", item.Path, item.Kind, item.Format, suspiciousSuffix(item.Suspicious)),
+					fmt.Sprintf("%s：%s/%s%s", item.Path, item.Kind, item.Format, suspiciousSuffix(item.Suspicious)),
+				))
 				for _, raw := range item.Detections {
 					if detector, ok := raw.(map[string]any); ok {
-						fmt.Printf("  detector %v: %v\n", detector["detector"], detector)
+						fmt.Printf("  %s %v：%v\n", cliText("detector", "检测器"), detector["detector"], detector)
 					}
 				}
 			}
@@ -1156,7 +1201,10 @@ func aggregateAudit(items []map[string]any) map[string]any {
 
 func printAuditHuman(report map[string]any) {
 	summary, _ := report["summary"].(map[string]any)
-	fmt.Printf("Root: %v\nFiles scanned: %v\nFiles skipped: %d\nBy kind: %v\nWith C2PA: %v\nWith AI metadata: %v\nWith suspicious text: %v\nActionable files: %v\nFindings by confidence: %v\n", report["root"], report["files_scanned"], len(report["files_skipped"].([]map[string]any)), summary["by_kind"], summary["with_c2pa"], summary["with_ai_metadata"], summary["with_suspicious_text"], summary["actionable_files"], summary["findings_by_confidence"])
+	fmt.Printf("%s\n", cliText(
+		fmt.Sprintf("Root: %v\nFiles scanned: %v\nFiles skipped: %d\nBy kind: %v\nWith C2PA: %v\nWith AI metadata: %v\nWith suspicious text: %v\nActionable files: %v\nFindings by confidence: %v", report["root"], report["files_scanned"], len(report["files_skipped"].([]map[string]any)), summary["by_kind"], summary["with_c2pa"], summary["with_ai_metadata"], summary["with_suspicious_text"], summary["actionable_files"], summary["findings_by_confidence"]),
+		fmt.Sprintf("根目录：%v\n已扫描文件：%v\n已跳过文件：%d\n按类型：%v\n包含 C2PA：%v\n包含 AI 元数据：%v\n包含可疑文本：%v\n需处理文件：%v\n按置信度统计：%v", report["root"], report["files_scanned"], len(report["files_skipped"].([]map[string]any)), summary["by_kind"], summary["with_c2pa"], summary["with_ai_metadata"], summary["with_suspicious_text"], summary["actionable_files"], summary["findings_by_confidence"]),
+	))
 	for _, raw := range report["files"].([]map[string]any) {
 		path := fmt.Sprint(raw["path"])
 		findings, _ := raw["findings"].([]string)
@@ -1170,7 +1218,7 @@ func printAuditHuman(report map[string]any) {
 		}
 	}
 	for _, raw := range report["files_skipped"].([]map[string]any) {
-		fmt.Printf("  [skipped] %v: %v\n", raw["path"], raw["reason"])
+		fmt.Printf("  [%s] %v: %v\n", cliText("skipped", "已跳过"), raw["path"], localizedError(errors.New(fmt.Sprint(raw["reason"]))))
 	}
 }
 
@@ -1235,31 +1283,37 @@ func countSuspicious(reports []core.FileReport) int {
 
 func suspiciousSuffix(value bool) string {
 	if value {
-		return " [suspicious]"
+		return " [" + cliText("suspicious", "可疑") + "]"
 	}
 	return ""
 }
 
 func printCleanHuman(result core.CleanResult) {
-	status := "unchanged"
+	status := cliText("unchanged", "未变化")
 	if result.Changed {
-		status = "cleaned"
+		status = cliText("cleaned", "已清理")
 	}
-	fmt.Printf("%s -> %s: %s (%s, %d -> %d bytes)\n", result.Input, result.Output, status, result.Kind, result.BytesIn, result.BytesOut)
+	fmt.Printf("%s\n", cliText(
+		fmt.Sprintf("%s -> %s: %s (%s, %d -> %d bytes)", result.Input, result.Output, status, result.Kind, result.BytesIn, result.BytesOut),
+		fmt.Sprintf("%s → %s：%s（%s，%d → %d 字节）", result.Input, result.Output, status, result.Kind, result.BytesIn, result.BytesOut),
+	))
 	for _, action := range result.Actions {
 		fmt.Printf("  - %s\n", action)
 	}
 	for _, warning := range result.Warnings {
-		fmt.Fprintf(os.Stderr, "  warning: %s\n", warning)
+		fmt.Fprintf(os.Stderr, "  %s：%s\n", cliText("warning", "警告"), warning)
 	}
 }
 
 func printReportHuman(report core.FileReport, stylometry bool, threshold float64) {
-	state := "clean"
+	state := cliText("clean", "干净")
 	if suspiciousReport(report) {
-		state = "suspicious"
+		state = cliText("suspicious", "可疑")
 	}
-	fmt.Printf("%s: %s/%s (%s)\n", report.Path, report.Kind, report.Format, state)
+	fmt.Printf("%s\n", cliText(
+		fmt.Sprintf("%s: %s/%s (%s)", report.Path, report.Kind, report.Format, state),
+		fmt.Sprintf("%s：%s/%s（%s）", report.Path, report.Kind, report.Format, state),
+	))
 	for i, finding := range report.Findings {
 		confidence := ""
 		if i < len(report.FindingsConfidence) {
@@ -1268,7 +1322,10 @@ func printReportHuman(report core.FileReport, stylometry bool, threshold float64
 		fmt.Printf("  - %s%s\n", finding, confidence)
 	}
 	if report.Text != nil {
-		fmt.Printf("  text: %d units, %d suspicious hits\n", report.Text.Length, report.Text.SuspiciousTotal)
+		fmt.Printf("%s\n", cliText(
+			fmt.Sprintf("  text: %d units, %d suspicious hits", report.Text.Length, report.Text.SuspiciousTotal),
+			fmt.Sprintf("  文本：%d 个单元，%d 个可疑命中", report.Text.Length, report.Text.SuspiciousTotal),
+		))
 		for _, hit := range report.Text.Hits {
 			fmt.Printf("  - %s %s x%d (%s, %s)\n", hit.Codepoint, hit.Kind, hit.Count, hit.Confidence, hit.Label)
 		}
@@ -1277,7 +1334,7 @@ func printReportHuman(report core.FileReport, stylometry bool, threshold float64
 		}
 	}
 	for _, note := range report.Notes {
-		fmt.Printf("  note: %s\n", note)
+		fmt.Printf("  %s：%s\n", cliText("note", "说明"), note)
 	}
 }
 
@@ -1292,9 +1349,15 @@ func printStylometryHumanWithExplain(values map[string]any, threshold float64, e
 	score, hasScore := values["score"].(float64)
 	confidence, _ := values["confidence_level"].(string)
 	if hasScore {
-		fmt.Printf("  stylometry: %s, score %.3f / threshold %.3f, confidence %s (%d words, %d sentences)\n", status, score, threshold, confidence, words, sentences)
+		fmt.Printf("%s\n", cliText(
+			fmt.Sprintf("  stylometry: %s, score %.3f / threshold %.3f, confidence %s (%d words, %d sentences)", status, score, threshold, confidence, words, sentences),
+			fmt.Sprintf("  文体统计：%s，得分 %.3f / 阈值 %.3f，置信度 %s（%d 个词，%d 个句子）", status, score, threshold, confidence, words, sentences),
+		))
 	} else {
-		fmt.Printf("  stylometry: %s (%d words, %d sentences; score unavailable below calibration length)\n", status, words, sentences)
+		fmt.Printf("%s\n", cliText(
+			fmt.Sprintf("  stylometry: %s (%d words, %d sentences; score unavailable below calibration length)", status, words, sentences),
+			fmt.Sprintf("  文体统计：%s（%d 个词，%d 个句子；文本短于校准长度，无法提供得分）", status, words, sentences),
+		))
 	}
 	if findings, ok := values["findings"].([]string); ok {
 		for _, finding := range findings {
@@ -1303,11 +1366,11 @@ func printStylometryHumanWithExplain(values map[string]any, threshold float64, e
 	}
 	if explain {
 		if markers, ok := values["matched_markers"].([]map[string]any); ok && len(markers) > 0 {
-			fmt.Println("\n  matched phrases detail:")
+			fmt.Printf("\n  %s：\n", cliText("matched phrases detail", "命中短语详情"))
 			for _, marker := range markers {
-				fmt.Printf("    * %v (occurrences: %v, weight: %v)\n", marker["phrase"], marker["count"], marker["weight"])
+				fmt.Printf("    * %v（%s：%v，%s：%v）\n", marker["phrase"], cliText("occurrences", "出现次数"), marker["count"], cliText("weight", "权重"), marker["weight"])
 				if samples, ok := marker["samples"].([]string); ok && len(samples) > 0 {
-					fmt.Printf("      sample: %q\n", samples[0])
+					fmt.Printf("      %s：%q\n", cliText("sample", "示例"), samples[0])
 				}
 			}
 		}
@@ -1347,7 +1410,7 @@ func runStylometry(args []string) int {
 		if statErr != nil {
 			errorsCount++
 			if !parsed.opts.JSON {
-				fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, statErr)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(statErr))
 			}
 			continue
 		}
@@ -1367,7 +1430,7 @@ func runStylometry(args []string) int {
 		if inspectErr != nil {
 			errorsCount++
 			if !parsed.opts.JSON {
-				fmt.Fprintf(os.Stderr, "aiwr: %s: %v\n", path, inspectErr)
+				fmt.Fprintf(os.Stderr, "aiwr: %s: %s\n", path, localizedError(inspectErr))
 			}
 			continue
 		}
@@ -1459,7 +1522,10 @@ func runGumbel(args []string) int {
 		pValue, _ := report["p_value"].(float64)
 		counted, _ := report["counted"].(int)
 		total, _ := report["tokens_total"].(int)
-		fmt.Printf("keyed-Gumbel (EXP) detection: watermarked=%t p=%.3g (threshold %g) counted=%d/%d\n", watermarked, pValue, threshold, counted, total)
+		fmt.Printf("%s\n", cliText(
+			fmt.Sprintf("keyed-Gumbel (EXP) detection: watermarked=%t p=%.3g (threshold %g) counted=%d/%d", watermarked, pValue, threshold, counted, total),
+			fmt.Sprintf("keyed-Gumbel（EXP）检测：含水印=%t，p=%.3g（阈值 %g），已计数=%d/%d", watermarked, pValue, threshold, counted, total),
+		))
 	}
 	return 0
 }
@@ -1564,7 +1630,10 @@ func runServe(args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	fmt.Fprintf(os.Stderr, "aiwr service listening on http://%s:%d\n", host, port)
+	fmt.Fprintf(os.Stderr, "%s\n", cliText(
+		fmt.Sprintf("aiwr service listening on http://%s:%d", host, port),
+		fmt.Sprintf("aiwr 服务正在监听 http://%s:%d", host, port),
+	))
 	if err := core.ServeWithOptions(ctx, host, port, apiKey, strategyConfig); err != nil {
 		return cliError(err)
 	}
@@ -1598,13 +1667,7 @@ func writeJSONTo(writer io.Writer, value any) {
 }
 
 func cliError(err error) int {
-	if errors.Is(err, flag.ErrHelp) {
-		return 0
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "aiwr: %v\n", err)
-	}
-	return 2
+	return writeCLIError(err)
 }
 
 // The standard flag package stops parsing at the first positional argument,

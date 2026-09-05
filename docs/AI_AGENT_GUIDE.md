@@ -1,5 +1,7 @@
 # aiwr AI agent operation guide
 
+Chinese translation: [AI_AGENT_GUIDE.zh-CN.md](AI_AGENT_GUIDE.zh-CN.md).
+
 This guide is for an AI agent that calls aiwr on a user's behalf. It is an
 operational contract rather than an implementation reference. Invoke commands
 with an argument array when possible; never interpolate a user-provided path

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/iruanp/aiwr/internal/core"
@@ -56,6 +57,46 @@ func TestMediaOutputNames(t *testing.T) {
 func TestCLIHelpIsSuccessful(t *testing.T) {
 	if got := cliError(flag.ErrHelp); got != 0 {
 		t.Fatalf("cliError(flag.ErrHelp) = %d, want 0", got)
+	}
+}
+
+func TestDetectCLILanguage(t *testing.T) {
+	for _, name := range []string{"AIWR_LANG", "AIWR_LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"} {
+		t.Setenv(name, "")
+	}
+	if got := detectCLILanguage(); got != cliEnglish {
+		t.Fatalf("empty locale = %v, want English", got)
+	}
+
+	t.Setenv("LANG", "zh_CN.UTF-8")
+	if got := detectCLILanguage(); got != cliChinese {
+		t.Fatalf("Chinese LANG = %v, want Chinese", got)
+	}
+
+	t.Setenv("LC_ALL", "C")
+	if got := detectCLILanguage(); got != cliEnglish {
+		t.Fatalf("LC_ALL precedence = %v, want English", got)
+	}
+
+	t.Setenv("AIWR_LANG", "zh-Hans")
+	if got := detectCLILanguage(); got != cliChinese {
+		t.Fatalf("AIWR_LANG override = %v, want Chinese", got)
+	}
+
+	t.Setenv("AIWR_LANG", "fr_FR")
+	if got := detectCLILanguage(); got != cliEnglish {
+		t.Fatalf("unsupported locale = %v, want English fallback", got)
+	}
+}
+
+func TestLocalizedUsage(t *testing.T) {
+	t.Setenv("AIWR_LANG", "en_US.UTF-8")
+	if usage := localizedUsage(); !strings.Contains(usage, "Usage:") || strings.Contains(usage, "用法：") {
+		t.Fatalf("English usage = %q", usage)
+	}
+	t.Setenv("AIWR_LANG", "zh_CN.UTF-8")
+	if usage := localizedUsage(); !strings.Contains(usage, "用法：") || strings.Contains(usage, "Usage:") {
+		t.Fatalf("Chinese usage = %q", usage)
 	}
 }
 
