@@ -749,7 +749,27 @@ func TestEPUBOPFMetadataScrubKeepsPlainCreator(t *testing.T) {
 	if containsString(actions, "scrub dc:creator (AI vendor name)") {
 		t.Fatalf("plain creator was scrubbed: %#v", actions)
 	}
-	if !bytes.Contains(cleaned, []byte("Jane Doe")) {
+	plainReader, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plainOPF []byte
+	for _, f := range plainReader.File {
+		if f.Name != "OEBPS/content.opf" {
+			continue
+		}
+		r, openErr := f.Open()
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		plainOPF, err = io.ReadAll(r)
+		_ = r.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		break
+	}
+	if !bytes.Contains(plainOPF, []byte("Jane Doe")) {
 		t.Fatal("plain creator did not survive")
 	}
 }
