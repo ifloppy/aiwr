@@ -3,8 +3,10 @@ package core
 import (
 	"archive/zip"
 	"bytes"
+	"compress/flate"
 	"encoding/base64"
 	"fmt"
+	"hash/crc32"
 	"html"
 	"io"
 	"net/url"
@@ -2115,12 +2117,23 @@ func cleanZipContainer(data []byte, format string, opts Options) ([]byte, []stri
 	zw := zip.NewWriter(&buf)
 	for _, member := range kept {
 		header := member.header
-		w, e := zw.CreateHeader(&header)
+		var w io.Writer
+		var e error
+		payload := member.data
+		if canonicalPackageFormat(format) {
+			payload, e = canonicalZipPayload(&header, member.data)
+			if e != nil {
+				return data, nil, e
+			}
+			w, e = zw.CreateRaw(&header)
+		} else {
+			w, e = zw.CreateHeader(&header)
+		}
 		if e != nil {
 			return data, nil, e
 		}
-		if len(member.data) > 0 {
-			if _, e = w.Write(member.data); e != nil {
+		if len(payload) > 0 {
+			if _, e = w.Write(payload); e != nil {
 				return data, nil, e
 			}
 		}
@@ -2137,6 +2150,52 @@ func cleanZipContainer(data []byte, format string, opts Options) ([]byte, []stri
 		}
 	}
 	return buf.Bytes(), actions, nil
+}
+
+func canonicalPackageFormat(format string) bool {
+	switch format {
+	case "docx", "xlsx", "pptx", "odt", "epub":
+		return true
+	default:
+		return false
+	}
+}
+
+func canonicalZipPayload(header *zip.FileHeader, data []byte) ([]byte, error) {
+	header.Flags &^= 0x8 // no data descriptor; sizes are known up front
+	header.Extra = nil
+	header.Comment = ""
+	header.CRC32 = crc32.ChecksumIEEE(data)
+	header.UncompressedSize64 = uint64(len(data))
+	if strings.EqualFold(header.Name, "mimetype") {
+		header.Method = zip.Store
+	}
+	if strings.HasSuffix(header.Name, "/") {
+		header.Method = zip.Store
+		header.CompressedSize64 = 0
+		return nil, nil
+	}
+	switch header.Method {
+	case zip.Store:
+		header.CompressedSize64 = uint64(len(data))
+		return data, nil
+	case zip.Deflate:
+		var compressed bytes.Buffer
+		writer, err := flate.NewWriter(&compressed, flate.DefaultCompression)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := writer.Write(data); err != nil {
+			return nil, err
+		}
+		if err := writer.Close(); err != nil {
+			return nil, err
+		}
+		header.CompressedSize64 = uint64(compressed.Len())
+		return compressed.Bytes(), nil
+	default:
+		return nil, fmt.Errorf("unsupported ZIP compression method %d", header.Method)
+	}
 }
 
 func prefixContainerActions(name string, actions []string) []string {

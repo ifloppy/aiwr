@@ -457,6 +457,49 @@ func TestODTManifestPrunesDroppedNamespacedEntry(t *testing.T) {
 	t.Fatal("cleaned ODT manifest is missing")
 }
 
+func TestODTCleanWritesStrictMimetypeEntry(t *testing.T) {
+	var source bytes.Buffer
+	zw := zip.NewWriter(&source)
+	w, err := zw.Create("mimetype")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(w, "application/vnd.oasis.opendocument.text"); err != nil {
+		t.Fatal(err)
+	}
+	w, err = zw.Create("content.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(w, `<?xml version="1.0"?><office:document-content/>`); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	cleaned, _, err := cleanZipContainer(source.Bytes(), "odt", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(zr.File) == 0 || zr.File[0].Name != "mimetype" {
+		t.Fatalf("first ODT entry = %v, want mimetype", zr.File)
+	}
+	mimetype := zr.File[0]
+	if mimetype.Method != zip.Store || mimetype.Flags&0x8 != 0 || len(mimetype.Extra) != 0 {
+		t.Fatalf("mimetype header is not ODF-compatible: method=%d flags=%#x extra=%x", mimetype.Method, mimetype.Flags, mimetype.Extra)
+	}
+	for _, file := range zr.File {
+		if file.Flags&0x8 != 0 || len(file.Extra) != 0 {
+			t.Fatalf("ODT entry is not canonical ZIP data: %s method=%d flags=%#x extra=%x", file.Name, file.Method, file.Flags, file.Extra)
+		}
+	}
+}
+
 func TestSVGScannerPreservesMarkupLikeText(t *testing.T) {
 	svg := []byte(`<svg><![CDATA[<metadata>keep</metadata><!-- keep --></svg>]]><metadata>drop</metadata><!-- c2pa drop --></svg>`)
 	cleaned, _, err := cleanSVG(svg, DefaultOptions())
@@ -629,6 +672,11 @@ func TestContainersAndZip(t *testing.T) {
 	zr, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		if f.Flags&0x8 != 0 || len(f.Extra) != 0 {
+			t.Fatalf("cleaned OOXML entry is not canonical ZIP data: %s flags=%#x extra=%x", f.Name, f.Flags, f.Extra)
+		}
 	}
 	for _, f := range zr.File {
 		if strings.HasPrefix(strings.ToLower(f.Name), "customxml/") {
