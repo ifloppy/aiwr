@@ -545,6 +545,21 @@ endobj
 	}
 }
 
+func TestPDFXMPPacketOffsetsStayByteAlignedForUnicode(t *testing.T) {
+	// U+023A (Ⱥ) has a three-byte lowercase mapping while its uppercase form
+	// uses two bytes. A Unicode lowercasing pass used for byte offsets would
+	// therefore make the xpacket end one byte past the original PDF.
+	pdf := []byte("%PDF-1.4\nȺ<?xpacket begin fake <?xpacket end r?>")
+	packets := pdfXMPPackets(pdf)
+	if len(packets) != 1 {
+		t.Fatalf("XMP packets = %d, want 1", len(packets))
+	}
+	cleaned, _ := pdfStdlibDocumentStrip(pdf, DefaultOptions())
+	if len(cleaned) != len(pdf) {
+		t.Fatalf("cleaned PDF length = %d, want %d", len(cleaned), len(pdf))
+	}
+}
+
 func TestISOBMFFTruncatedByteScan(t *testing.T) {
 	data := append([]byte{0, 0, 0, 0x40, 'f', 't', 'y', 'p', 'a', 'v', 'i', 'f'}, []byte("c2pa contentcredentials")...)
 	c2, ai, findings := inspectISOBMFF(data, "avif")

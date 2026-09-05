@@ -1545,6 +1545,9 @@ func inspectPDF(data []byte, paths ...string) (bool, bool, []string, map[string]
 		findings = append(findings, "XMP packet present")
 		xmp := make([]byte, 0)
 		for _, packet := range packets {
+			if !validPDFByteBlock(packet, len(data)) {
+				continue
+			}
 			xmp = append(xmp, data[packet.openStart:packet.closeEnd]...)
 		}
 		lower := bytes.ToLower(xmp)
@@ -1634,7 +1637,11 @@ func isPDFWhitespace(value byte) bool {
 }
 
 func pdfXMPPackets(data []byte) []byteBlock {
-	lower := bytes.ToLower(data)
+	// Use ASCII-only folding here. bytes.ToLower applies Unicode mappings,
+	// which can change the byte length (for example U+023A -> U+2C65). The
+	// indexes returned by bytes.Index are later applied to the original PDF;
+	// a length-changing fold would therefore make malformed PDFs panic.
+	lower := pdfASCIILower(data)
 	blocks := []byteBlock{}
 	for pos := 0; pos < len(data); {
 		start := bytes.Index(lower[pos:], []byte("<?xpacket begin"))
@@ -1658,6 +1665,22 @@ func pdfXMPPackets(data []byte) []byteBlock {
 	return blocks
 }
 
+func pdfASCIILower(data []byte) []byte {
+	lower := append([]byte(nil), data...)
+	for i, value := range lower {
+		if value >= 'A' && value <= 'Z' {
+			lower[i] = value + ('a' - 'A')
+		}
+	}
+	return lower
+}
+
+func validPDFByteBlock(block byteBlock, size int) bool {
+	return block.openStart >= 0 && block.openStart <= block.openEnd &&
+		block.openEnd <= block.closeStart && block.closeStart <= block.closeEnd &&
+		block.closeEnd <= size
+}
+
 func pdfStructuredBlob(data []byte) []byte {
 	blocks := pdfStreamBlocks(data)
 	var out bytes.Buffer
@@ -1677,6 +1700,9 @@ func pdfStructuredBlob(data []byte) []byte {
 	// marker flood from being accidentally concatenated with later evidence.
 	out.WriteByte('\n')
 	for _, block := range pdfXMPPackets(data) {
+		if !validPDFByteBlock(block, len(data)) {
+			continue
+		}
 		out.Write(data[block.openStart:block.closeEnd])
 		out.WriteByte('\n')
 	}
@@ -1690,6 +1716,9 @@ func cleanPDFFallback(data []byte, opts Options) ([]byte, []string, error) {
 	if packets := pdfXMPPackets(out); len(packets) > 0 {
 		blanked := 0
 		for _, packet := range packets {
+			if !validPDFByteBlock(packet, len(out)) {
+				continue
+			}
 			if !stripAll && len(containsAny(out[packet.openStart:packet.closeEnd], aiMetaHints)) == 0 {
 				continue
 			}

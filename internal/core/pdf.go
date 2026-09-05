@@ -207,7 +207,12 @@ func pdfStdlibDocumentStrip(data []byte, opts Options) ([]byte, []string) {
 	out := append([]byte(nil), data...)
 	blanked := 0
 	stripAll := stripAllMetadata(opts)
+	invalidPackets := 0
 	for _, packet := range pdfXMPPackets(data) {
+		if !validPDFByteBlock(packet, len(data)) || !validPDFByteBlock(packet, len(out)) {
+			invalidPackets++
+			continue
+		}
 		if !stripAll && len(containsAny(data[packet.openStart:packet.closeEnd], aiMetaHints)) == 0 {
 			continue
 		}
@@ -221,10 +226,17 @@ func pdfStdlibDocumentStrip(data []byte, opts Options) ([]byte, []string) {
 		}
 	}
 	if blanked > 0 {
-		return out, []string{
+		actions := []string{
 			fmt.Sprintf("blanked XMP xpacket x%d (degraded; byte offsets preserved)", blanked),
 			"warning: pure-stdlib PDF strip is best-effort; prefer exiftool",
 		}
+		if invalidPackets > 0 {
+			actions = append(actions, fmt.Sprintf("warning: skipped %d malformed PDF XMP packet(s)", invalidPackets))
+		}
+		return out, actions
+	}
+	if invalidPackets > 0 {
+		return out, []string{fmt.Sprintf("warning: skipped %d malformed PDF XMP packet(s)", invalidPackets)}
 	}
 	return out, []string{"no PDF cleaner available (install exiftool for reliable metadata strip); document-level metadata left as-is"}
 }
