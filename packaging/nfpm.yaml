@@ -1,0 +1,46 @@
+name: aiwr
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+maintainer: aiwr contributors <maintainers@aiwr.invalid>
+description: Inspect and clean AI watermark and provenance metadata
+vendor: aiwr contributors
+homepage: https://github.com/iruanp/aiwr
+license: MIT
+section: utils
+priority: optional
+
+contents:
+  - src: dist/nfpm/aiwr
+    dst: /usr/bin/aiwr
+    file_info:
+      mode: 0755
+  - src: README.md
+    dst: /usr/share/doc/aiwr/README.md
+  - src: AGENTS.md
+    dst: /usr/share/doc/aiwr/AGENTS.md
+  - src: docs/USER_GUIDE.md
+    dst: /usr/share/doc/aiwr/docs/USER_GUIDE.md
+  - src: docs/AI_AGENT_GUIDE.md
+    dst: /usr/share/doc/aiwr/docs/AI_AGENT_GUIDE.md
+  - src: ROADMAP.md
+    dst: /usr/share/doc/aiwr/ROADMAP.md
+  - src: UPSTREAM.md
+    dst: /usr/share/doc/aiwr/UPSTREAM.md
+  - src: LICENSE
+    dst: /usr/share/doc/aiwr/LICENSE
+  - src: LICENSE
+    dst: /usr/share/licenses/aiwr/LICENSE
+  - src: packaging/aiwr.1
+    dst: /usr/share/man/man1/aiwr.1
+  - src: config/clean_strategy.json
+    dst: /usr/share/aiwr/clean_strategy.json
+  - src: packaging/README.md
+    dst: /usr/share/doc/aiwr/packaging/README.md
+
+rpm:
+  group: Applications/System
+
+archlinux:
+  packager: aiwr contributors

@@ -1,0 +1,203 @@
+version: 2
+project_name: aiwr
+
+builds:
+  - id: aiwr
+    main: ./cmd/aiwr
+    binary: aiwr
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+  - id: aiwr-linux-armv7
+    main: ./cmd/aiwr
+    binary: aiwr
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm
+    goarm:
+      - "7"
+    ldflags:
+      - -s -w
+
+archives:
+  - id: archives
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+      - AGENTS.md
+      - docs/USER_GUIDE.md
+      - docs/AI_AGENT_GUIDE.md
+      - ROADMAP.md
+      - UPSTREAM.md
+      - config/clean_strategy.json
+      - packaging/aiwr.1
+
+nfpms:
+  - id: deb
+    package_name: aiwr
+    vendor: aiwr contributors
+    homepage: https://github.com/iruanp/aiwr
+    maintainer: aiwr contributors
+    description: Go CLI for inspecting and cleaning AI watermark and provenance metadata
+    license: MIT
+    formats:
+      - deb
+    bindir: /usr/bin
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/aiwr/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/aiwr/LICENSE
+      - src: AGENTS.md
+        dst: /usr/share/doc/aiwr/AGENTS.md
+      - src: docs/USER_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/USER_GUIDE.md
+      - src: docs/AI_AGENT_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/AI_AGENT_GUIDE.md
+      - src: ROADMAP.md
+        dst: /usr/share/doc/aiwr/ROADMAP.md
+      - src: UPSTREAM.md
+        dst: /usr/share/doc/aiwr/UPSTREAM.md
+      - src: packaging/aiwr.1
+        dst: /usr/share/man/man1/aiwr.1
+      - src: config/clean_strategy.json
+        dst: /usr/share/aiwr/clean_strategy.json
+      - src: LICENSE
+        dst: /usr/share/licenses/aiwr/LICENSE
+      - src: packaging/README.md
+        dst: /usr/share/doc/aiwr/packaging/README.md
+  - id: rpm
+    package_name: aiwr
+    vendor: aiwr contributors
+    homepage: https://github.com/iruanp/aiwr
+    maintainer: aiwr contributors
+    description: Go CLI for inspecting and cleaning AI watermark and provenance metadata
+    license: MIT
+    formats:
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/aiwr/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/aiwr/LICENSE
+      - src: AGENTS.md
+        dst: /usr/share/doc/aiwr/AGENTS.md
+      - src: docs/USER_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/USER_GUIDE.md
+      - src: docs/AI_AGENT_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/AI_AGENT_GUIDE.md
+      - src: ROADMAP.md
+        dst: /usr/share/doc/aiwr/ROADMAP.md
+      - src: UPSTREAM.md
+        dst: /usr/share/doc/aiwr/UPSTREAM.md
+      - src: packaging/aiwr.1
+        dst: /usr/share/man/man1/aiwr.1
+      - src: config/clean_strategy.json
+        dst: /usr/share/aiwr/clean_strategy.json
+      - src: LICENSE
+        dst: /usr/share/licenses/aiwr/LICENSE
+      - src: packaging/README.md
+        dst: /usr/share/doc/aiwr/packaging/README.md
+  - id: apk
+    package_name: aiwr
+    vendor: aiwr contributors
+    homepage: https://github.com/iruanp/aiwr
+    maintainer: aiwr contributors
+    description: Go CLI for inspecting and cleaning AI watermark and provenance metadata
+    license: MIT
+    formats:
+      - apk
+    bindir: /usr/bin
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/aiwr/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/aiwr/LICENSE
+      - src: AGENTS.md
+        dst: /usr/share/doc/aiwr/AGENTS.md
+      - src: docs/USER_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/USER_GUIDE.md
+      - src: docs/AI_AGENT_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/AI_AGENT_GUIDE.md
+      - src: ROADMAP.md
+        dst: /usr/share/doc/aiwr/ROADMAP.md
+      - src: UPSTREAM.md
+        dst: /usr/share/doc/aiwr/UPSTREAM.md
+      - src: packaging/aiwr.1
+        dst: /usr/share/man/man1/aiwr.1
+      - src: config/clean_strategy.json
+        dst: /usr/share/aiwr/clean_strategy.json
+      - src: LICENSE
+        dst: /usr/share/licenses/aiwr/LICENSE
+      - src: packaging/README.md
+        dst: /usr/share/doc/aiwr/packaging/README.md
+  - id: archlinux
+    package_name: aiwr
+    vendor: aiwr contributors
+    homepage: https://github.com/iruanp/aiwr
+    maintainer: aiwr contributors
+    description: Go CLI for inspecting and cleaning AI watermark and provenance metadata
+    license: MIT
+    formats:
+      - archlinux
+    bindir: /usr/bin
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/aiwr/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/aiwr/LICENSE
+      - src: AGENTS.md
+        dst: /usr/share/doc/aiwr/AGENTS.md
+      - src: docs/USER_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/USER_GUIDE.md
+      - src: docs/AI_AGENT_GUIDE.md
+        dst: /usr/share/doc/aiwr/docs/AI_AGENT_GUIDE.md
+      - src: ROADMAP.md
+        dst: /usr/share/doc/aiwr/ROADMAP.md
+      - src: UPSTREAM.md
+        dst: /usr/share/doc/aiwr/UPSTREAM.md
+      - src: packaging/aiwr.1
+        dst: /usr/share/man/man1/aiwr.1
+      - src: config/clean_strategy.json
+        dst: /usr/share/aiwr/clean_strategy.json
+      - src: LICENSE
+        dst: /usr/share/licenses/aiwr/LICENSE
+      - src: packaging/README.md
+        dst: /usr/share/doc/aiwr/packaging/README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+release:
+  github:
+    owner: iruanp
+    name: aiwr
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

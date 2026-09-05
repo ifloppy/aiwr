@@ -1,0 +1,1150 @@
+package core
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func testPNG(text string) []byte {
+	out := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}
+	ihdr := make([]byte, 13)
+	binary.BigEndian.PutUint32(ihdr[0:4], 1)
+	binary.BigEndian.PutUint32(ihdr[4:8], 1)
+	ihdr[8], ihdr[9], ihdr[10], ihdr[11], ihdr[12] = 8, 2, 0, 0, 0
+	out = append(out, pngChunk([]byte("IHDR"), ihdr)...)
+	out = append(out, pngChunk([]byte("tEXt"), append([]byte("Comment\x00"), []byte(text)...))...)
+	out = append(out, pngChunk([]byte("IEND"), nil)...)
+	return out
+}
+
+func testJPEG(payload string) []byte {
+	out := []byte{0xff, 0xd8}
+	segment := []byte(payload)
+	length := make([]byte, 2)
+	binary.BigEndian.PutUint16(length, uint16(len(segment)+2))
+	out = append(out, 0xff, 0xeb)
+	out = append(out, length...)
+	out = append(out, segment...)
+	return append(out, 0xff, 0xd9)
+}
+
+func testWAV() []byte {
+	chunk := func(name string, payload []byte) []byte {
+		out := append([]byte(name), make([]byte, 4)...)
+		binary.LittleEndian.PutUint32(out[4:8], uint32(len(payload)))
+		out = append(out, payload...)
+		if len(payload)&1 != 0 {
+			out = append(out, 0)
+		}
+		return out
+	}
+	body := append([]byte("WAVE"), chunk("LIST", []byte("INFOc2pa"))...)
+	out := append([]byte("RIFF"), make([]byte, 4)...)
+	binary.LittleEndian.PutUint32(out[4:8], uint32(len(body)))
+	return append(out, body...)
+}
+
+func testID3(payload string) []byte {
+	frame := append([]byte("TXXX"), make([]byte, 6)...)
+	binary.BigEndian.PutUint32(frame[4:8], uint32(len(payload)))
+	frame = append(frame, []byte(payload)...)
+	out := append([]byte{'I', 'D', '3', 3, 0, 0}, synchsafeBytes(len(frame))...)
+	return append(out, frame...)
+}
+
+func testZip(t *testing.T, format string, files map[string]string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	zw := zip.NewWriter(&buffer)
+	for name, value := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(w, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func testGIFApplication(identifier string, payload []byte) []byte {
+	data := append([]byte("GIF89a"), 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	data = append(data, 0x21, 0xff, byte(len(identifier)))
+	data = append(data, []byte(identifier)...)
+	data = append(data, byte(len(payload)))
+	data = append(data, payload...)
+	data = append(data, 0x00, 0x3b)
+	return data
+}
+
+func TestTextInspectAndClean(t *testing.T) {
+	input := []byte("A\u200bB\u00a0C\u202eD")
+	report := inspectText(input, false, false)
+	if report.SuspiciousTotal != 3 {
+		t.Fatalf("suspicious total = %d, want 3", report.SuspiciousTotal)
+	}
+	cleaned, stats := cleanText(input, DefaultOptions())
+	if got, want := string(cleaned), "AB CD"; got != want {
+		t.Fatalf("cleaned text = %q, want %q", got, want)
+	}
+	if stats["removed_count"] != 2 || stats["replaced_count"] != 1 {
+		t.Fatalf("unexpected stats: %#v", stats)
+	}
+	opts := DefaultOptions()
+	opts.StripBidi = true
+	cleaned, _ = cleanText(input, opts)
+	if strings.ContainsRune(string(cleaned), '\u202e') {
+		t.Fatal("bidi control survived --strip-bidi")
+	}
+	invalid := []byte{'a', 0xff, 'b'}
+	cleaned, _ = cleanText(invalid, DefaultOptions())
+	if !bytes.Equal(cleaned, invalid) {
+		t.Fatalf("invalid UTF-8 was not preserved: %x", cleaned)
+	}
+	// Surrogateescape bytes advance the previous-kept context in the upstream
+	// implementation; a Khmer filler after one must not bind to the letter
+	// before it, even though the invalid byte itself is preserved.
+	contextualInvalid := []byte{0xe1, 0x9e, 0x80, 0xff, 0xe1, 0x9e, 0xb4}
+	cleaned, _ = cleanText(contextualInvalid, DefaultOptions())
+	wantContextual := []byte{0xe1, 0x9e, 0x80, 0xff}
+	if !bytes.Equal(cleaned, wantContextual) {
+		t.Fatalf("invalid UTF-8 context = %x, want %x", cleaned, wantContextual)
+	}
+}
+
+func TestNFKCStatsCountChangedInputCodepoints(t *testing.T) {
+	opts := DefaultOptions()
+	opts.NFKC = true
+	cleaned, stats := cleanText([]byte("ＡＢ ﬃ"), opts)
+	if string(cleaned) != "AB ffi" {
+		t.Fatalf("NFKC output = %q", cleaned)
+	}
+	if got := stats["replaced"].(map[string]int)["NFKC_normalize"]; got != 3 {
+		t.Fatalf("NFKC changed count = %d, want 3", got)
+	}
+
+	cleaned, stats = cleanText([]byte("A\u030a A\u030a"), opts)
+	if string(cleaned) != "Å Å" {
+		t.Fatalf("composed NFKC output = %q", cleaned)
+	}
+	if got := stats["replaced"].(map[string]int)["NFKC_normalize"]; got != 4 {
+		t.Fatalf("composed NFKC changed count = %d, want 4", got)
+	}
+	if got := countNFKCChangedRunes("aba", "bca"); got != 2 {
+		t.Fatalf("SequenceMatcher-compatible changed count = %d, want 2", got)
+	}
+}
+
+func TestTruncatedID3SkipsInvalidMP3Sync(t *testing.T) {
+	header := []byte("ID3\x03\x00\x00\x00\x00\x03\x74")
+	partial := []byte("COMM\x00\x00\x00\x10\x00\x00\x00engGenerated by ChatGPT")
+	falseSync := []byte("\xff\xe0\x00\x00garbage")
+	validFrame := append([]byte("\xff\xfb\x90\x64"), bytes.Repeat([]byte{0xbb}, 100)...)
+	input := append(append(append(header, partial...), falseSync...), validFrame...)
+	cleaned, actions, err := stripID3(input, true)
+	if err != nil || !bytes.Equal(cleaned, validFrame) {
+		t.Fatalf("truncated ID3 recovery = %x, actions=%v, err=%v", cleaned, actions, err)
+	}
+}
+
+func TestStylometryInspection(t *testing.T) {
+	short, err := InspectBytes([]byte("a short note"), "note.txt", Options{Stylometry: true, Threshold: 0.65})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if short.Text == nil || short.Text.Stylometry["status"] != "insufficient_length" {
+		t.Fatalf("short stylometry report = %#v", short.Text)
+	}
+
+	longText := strings.Repeat("We delve into this topic with careful context and practical examples. ", 12)
+	opts := DefaultOptions()
+	opts.Stylometry = true
+	report, err := InspectBytes([]byte(longText), "note.txt", opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Text == nil || report.Text.Stylometry["status"] != "ok" {
+		t.Fatalf("long stylometry report = %#v", report.Text)
+	}
+	if _, ok := report.Text.Stylometry["score"].(float64); !ok {
+		t.Fatalf("stylometry score is not numeric: %#v", report.Text.Stylometry)
+	}
+	if !StylometrySuspicious(report.Text.Stylometry) {
+		t.Fatalf("formulaic sample was not flagged: %#v", report.Text.Stylometry)
+	}
+}
+
+func TestGumbelDetector(t *testing.T) {
+	ids, err := LoadGumbelTokenIDs([]byte("[1, 2, 3, 4, 5, 6]"))
+	if err != nil || len(ids) != 6 || ids[5] != 6 {
+		t.Fatalf("token JSON parse = %#v, %v", ids, err)
+	}
+	lineIDs, err := LoadGumbelTokenIDs([]byte("0x1\n2\n"))
+	if err != nil || len(lineIDs) != 2 || lineIDs[0] != 1 || lineIDs[1] != 2 {
+		t.Fatalf("token line parse = %#v, %v", lineIDs, err)
+	}
+	if _, err := LoadGumbelTokenIDs([]byte("[1] [2]")); err == nil {
+		t.Fatal("trailing token-id JSON was accepted")
+	}
+	report, err := DetectGumbelTokenIDs(ids, "secret", 4, DefaultGumbelThreshold)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report["counted"] != 2 || report["skipped_no_context"] != 4 || report["available"] != true {
+		t.Fatalf("unexpected Gumbel report: %#v", report)
+	}
+	short, err := DetectGumbelText("one two", "secret", 4, DefaultGumbelThreshold)
+	if err != nil || short["is_watermarked"] != false || short["p_value"] != 1.0 {
+		t.Fatalf("short Gumbel report: %#v, %v", short, err)
+	}
+	if _, err := DetectGumbelText("text", "0x0", 4, 1); err == nil {
+		t.Fatal("threshold 1 was accepted")
+	}
+}
+
+func TestDetectTextRegistryOrder(t *testing.T) {
+	t.Setenv("MARKLLM_DIR", "")
+	t.Setenv("WATERMARKS_GUMBEL_KEY", "")
+	report, detections, err := DetectBytes([]byte("plain text"), "sample.txt", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Kind != KindText || len(detections) != 4 {
+		t.Fatalf("text detections = %#v for report %#v", detections, report)
+	}
+	want := []string{"markllm", "gumbel", "claude-text", "stylometry"}
+	for i, detection := range detections {
+		values, ok := detection.(map[string]any)
+		if !ok || values["detector"] != want[i] {
+			t.Fatalf("detection[%d] = %#v, want detector %q", i, detection, want[i])
+		}
+	}
+}
+
+func TestSynthIDSidecar(t *testing.T) {
+	var gotAuthorization string
+	scorer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/score" {
+			t.Errorf("SynthID path = %s", r.URL.Path)
+		}
+		gotAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, "{\"available\":true,\"is_watermarked\":true,\"confidence\":0.91}")
+	}))
+	defer scorer.Close()
+	t.Setenv("WATERMARKS_SYNTHID_SCORER_URL", scorer.URL)
+	t.Setenv("WATERMARKS_SYNTHID_SCORER_API_KEY", "synth-secret")
+	report := detectSynthID(testPNG("ordinary"))
+	if report == nil || report["available"] != true || report["is_watermarked"] != true || gotAuthorization != "Bearer synth-secret" {
+		t.Fatalf("unexpected SynthID sidecar report/auth: %#v %q", report, gotAuthorization)
+	}
+}
+
+func TestLayerBOpenAICompatible(t *testing.T) {
+	var gotAuthorization string
+	rewriteServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("rewrite path = %s", r.URL.Path)
+		}
+		gotAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"content":"rewritten\u200b text"}}]}`)
+	}))
+	defer rewriteServer.Close()
+	t.Setenv("WATERMARKS_REWRITE_API_KEY", "layer-b-secret")
+	opts := DefaultOptions()
+	opts.Strategy = "paraphrase@0.8"
+	opts.RewriteBackend = "openai-compatible"
+	opts.RewriteModel = "test-model"
+	opts.RewriteBaseURL = rewriteServer.URL
+	opts.LayerAAfter = true
+	out, stats, err := ApplyLayerB("original text", opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "rewritten text" || gotAuthorization != "Bearer layer-b-secret" {
+		t.Fatalf("unexpected Layer B output/auth: %q %q", out, gotAuthorization)
+	}
+	if stats["backend"] != "openai-compatible" {
+		t.Fatalf("unexpected Layer B stats: %#v", stats)
+	}
+
+	for _, key := range []string{"WATERMARKS_REWRITE_BACKEND", "WATERMARKS_REWRITE_MODEL", "WATERMARKS_REWRITE_BASE_URL", "WATERMARKS_REWRITE_API_KEY", "OPENAI_API_KEY"} {
+		t.Setenv(key, "")
+	}
+	if _, _, err := ApplyLayerB("original text", Options{Strategy: "paraphrase@0.8"}); err == nil {
+		t.Fatal("unconfigured Layer B backend was accepted")
+	}
+}
+
+func TestImageFormats(t *testing.T) {
+	png := testPNG("c2pa generated by Midjourney")
+	report := inspectImage(png, "x.png")
+	if !report.HasC2PA || !report.HasAIMetadata {
+		t.Fatalf("PNG marker was not detected: %#v", report)
+	}
+	cleaned, actions, err := cleanImage(png, "png", DefaultOptions())
+	if err != nil || len(actions) == 0 {
+		t.Fatalf("PNG clean failed: %v %#v", err, actions)
+	}
+	if inspect, _, _ := inspectPNG(cleaned); inspect {
+		t.Fatalf("C2PA survived PNG clean: %q", actions)
+	}
+
+	jpeg := testJPEG("jumb c2pa")
+	if report := inspectImage(jpeg, "x.jpg"); !report.HasC2PA {
+		t.Fatalf("JPEG APP11 marker was not detected: %#v", report)
+	}
+	cleaned, _, err = cleanImage(jpeg, "jpeg", DefaultOptions())
+	if err != nil || bytes.Contains(cleaned, []byte("jumb")) {
+		t.Fatalf("JPEG marker survived clean: %v %q", err, cleaned)
+	}
+
+	wav := testWAV()
+	if report := inspectAV(wav, "x.wav"); !report.HasC2PA {
+		t.Fatalf("WAV marker was not detected: %#v", report)
+	}
+	cleaned, _, err = cleanAV(wav, "wav", DefaultOptions())
+	if err != nil || bytes.Contains(bytes.ToLower(cleaned), []byte("c2pa")) {
+		t.Fatalf("WAV marker survived clean: %v", err)
+	}
+
+	id3 := testID3("application/c2pa")
+	if report := inspectAV(id3, "x.mp3"); !report.HasC2PA {
+		t.Fatalf("ID3 marker was not detected: %#v", report)
+	}
+	cleaned, _, err = cleanAV(id3, "mp3", DefaultOptions())
+	if err != nil || bytes.Contains(cleaned, []byte("c2pa")) {
+		t.Fatalf("ID3 marker survived clean: %v", err)
+	}
+}
+
+func TestUnavailableImagePixelBackendKeepsMetadataClean(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "marked.png")
+	if err := os.WriteFile(input, testPNG("c2pa generated by Midjourney"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	opts := DefaultOptions()
+	opts.RemovePixel = "ctrlregen"
+	opts.CtrlRegenDir = filepath.Join(dir, "missing-backend")
+	result, err := CleanFile(input, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.PixelRemoval == nil || result.PixelRemoval["available"] != false {
+		t.Fatalf("pixel backend report = %#v", result.PixelRemoval)
+	}
+	cleaned, err := os.ReadFile(result.Output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(bytes.ToLower(cleaned), []byte("c2pa")) {
+		t.Fatal("metadata-cleaned output was lost when optional pixel backend was unavailable")
+	}
+}
+
+func TestWebPSizeMismatchIsInspectionAndCleanError(t *testing.T) {
+	body := append([]byte("WEBP"), []byte("VP8 ")...)
+	body = append(body, []byte{4, 0, 0, 0}...)
+	body = append(body, []byte("data")...)
+	data := append([]byte("RIFF"), make([]byte, 4)...)
+	data = append(data, body...)
+	binary.LittleEndian.PutUint32(data[4:8], uint32(len(data)))
+
+	_, _, findings := inspectWebP(data)
+	if len(findings) == 0 || !strings.Contains(findings[0], "RIFF size mismatch") {
+		t.Fatalf("WebP size mismatch was not reported: %v", findings)
+	}
+	if _, _, err := cleanImage(data, "webp", DefaultOptions()); err == nil || !strings.Contains(err.Error(), "malformed WebP") {
+		t.Fatalf("malformed WebP was rewritten or returned the wrong error: %v", err)
+	}
+}
+
+func TestISOBMFFC2PAUUIDAtFullBoxOffset(t *testing.T) {
+	ftyp := buildBMFFBox([]byte("ftyp"), []byte("avif"), 8)
+	payload := append([]byte{0, 0, 0, 0}, c2paBMFFUUID...)
+	data := append(ftyp, buildBMFFBox([]byte("uuid"), payload, 8)...)
+	c2, ai, findings := inspectISOBMFF(data, "avif")
+	if !c2 || !ai || len(findings) == 0 {
+		t.Fatalf("C2PA UUID at FullBox offset was not detected: c2pa=%v ai=%v findings=%v", c2, ai, findings)
+	}
+}
+
+func TestXMLOnlyEntityDecoder(t *testing.T) {
+	if got := decodeXMLEntities("Hello&#x200B;World &#8203; &amp; &lt; &nbsp; &#0;"); got != "Hello\u200bWorld \u200b & < &nbsp; &#0;" {
+		t.Fatalf("XML entity decode = %q", got)
+	}
+	if got := decodeXMLEntities("&#x110000; &#xD800;"); got != "&#x110000; &#xD800;" {
+		t.Fatalf("invalid XML references were decoded: %q", got)
+	}
+}
+
+func TestXMLMetadataScannerPreservesQuotedMarkupAndCDATA(t *testing.T) {
+	xml := `<!-- <dc:creator>comment-only</dc:creator> --><w:t><![CDATA[<dc:creator>keep</dc:creator>]]></w:t><dc:creator title="literal > keep">real</dc:creator>`
+	cleaned, actions := scrubOOXML([]byte(xml))
+	got := string(cleaned)
+	if len(actions) == 0 || !strings.Contains(got, `title="literal > keep"`) || strings.Contains(got, `>real</dc:creator>`) {
+		t.Fatalf("OOXML metadata was not removed safely: actions=%v xml=%s", actions, got)
+	}
+	if !strings.Contains(got, `comment-only`) || !strings.Contains(got, `<dc:creator>keep</dc:creator>`) {
+		t.Fatalf("comment/CDATA markup was damaged: %s", got)
+	}
+
+	odt := `<!-- <meta:generator>keep-comment</meta:generator> --><text:p><![CDATA[<meta:generator>keep-cdata</meta:generator>]]></text:p><meta:generator data="literal > keep">LibreOffice</meta:generator><dc:creator>Author</dc:creator>`
+	cleaned, actions = scrubODTMeta([]byte(odt))
+	got = string(cleaned)
+	if len(actions) != 2 || strings.Contains(got, `>LibreOffice</meta:generator>`) || strings.Contains(got, `>Author</dc:creator>`) {
+		t.Fatalf("ODT metadata was not removed safely: actions=%v xml=%s", actions, got)
+	}
+	if !strings.Contains(got, `keep-comment`) || !strings.Contains(got, `keep-cdata`) {
+		t.Fatalf("ODT comment/attribute content was damaged: %s", got)
+	}
+}
+
+func TestODTManifestPrunesDroppedNamespacedEntry(t *testing.T) {
+	manifest := `<?xml version="1.0"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="/"/><manifest:file-entry manifest:full-path="content.xml"/><manifest:file-entry manifest:full-path="custommeta.xml"/></manifest:manifest>`
+	data := testZip(t, "odt", map[string]string{
+		"mimetype":              "application/vnd.oasis.opendocument.text",
+		"content.xml":           `<?xml version="1.0"?><office:document-content/>`,
+		"META-INF/manifest.xml": manifest,
+		"custommeta.xml":        `<meta><creator>Anthropic Claude</creator></meta>`,
+	})
+	cleaned, actions, err := cleanZipContainer(data, "odt", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(actions, "drop manifest entries x1") {
+		t.Fatalf("ODT manifest action missing: %v", actions)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range zr.File {
+		if file.Name != "META-INF/manifest.xml" {
+			continue
+		}
+		r, openErr := file.Open()
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		body, readErr := io.ReadAll(r)
+		_ = r.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if strings.Contains(string(body), "custommeta.xml") || !strings.Contains(string(body), `full-path="content.xml"`) {
+			t.Fatalf("ODT manifest was not pruned: %s", body)
+		}
+		return
+	}
+	t.Fatal("cleaned ODT manifest is missing")
+}
+
+func TestSVGScannerPreservesMarkupLikeText(t *testing.T) {
+	svg := []byte(`<svg><![CDATA[<metadata>keep</metadata><!-- keep --></svg>]]><metadata>drop</metadata><!-- c2pa drop --></svg>`)
+	cleaned, _, err := cleanSVG(svg, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(cleaned)
+	if !strings.Contains(got, `<metadata>keep</metadata>`) || strings.Contains(got, `<!-- c2pa drop -->`) || strings.Contains(got, `><metadata>drop</metadata>`) {
+		t.Fatalf("SVG markup-like content was handled incorrectly: %s", got)
+	}
+}
+
+func TestHTMLAndSVGScansAreQuoteAware(t *testing.T) {
+	htmlInput := []byte(`<html><head><meta name="description" content="literal > keep"><meta name="generator" content="WordPress"><script type="application/ld+json">{"description":"keep"}</script><script type="application/ld+json">{"c2pa":"drop"}</script></head><body data-ai-label="drop">visible</body></html>`)
+	c2, ai, findings, _ := inspectHTML(htmlInput)
+	if !c2 || !ai || len(findings) == 0 {
+		t.Fatalf("HTML markers not detected: c2pa=%v ai=%v findings=%v", c2, ai, findings)
+	}
+	cleaned, _, err := cleanHTML(htmlInput, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(cleaned)
+	if strings.Contains(got, `data-ai-label`) || strings.Contains(got, `"c2pa":"drop"`) {
+		t.Fatalf("HTML metadata survived: %s", got)
+	}
+	if !strings.Contains(got, `content="literal > keep"`) || !strings.Contains(got, `WordPress`) || !strings.Contains(got, `"description":"keep"`) {
+		t.Fatalf("legitimate HTML content was damaged: %s", got)
+	}
+
+	svg := []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" generator='tool' inkscape:version='1.0' title="<!ENTITY keep>"><metadata>` + strings.Repeat("x", 32) + `</metadata><text><![CDATA[<!ENTITY keep>]]></text><!-- ordinary --><!-- c2pa marker --></svg>`)
+	cleaned, _, err = cleanSVG(svg, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = string(cleaned)
+	if strings.Contains(got, `generator=`) || strings.Contains(got, `inkscape:version`) || strings.Contains(got, `<metadata>`) || strings.Contains(got, `c2pa marker`) {
+		t.Fatalf("SVG provenance survived: %s", got)
+	}
+	if !strings.Contains(got, `<!ENTITY keep>`) {
+		t.Fatalf("SVG CDATA/quoted content was damaged: %s", got)
+	}
+}
+
+func TestEmbeddedDataURIsSupportBase64AndPercentEncoding(t *testing.T) {
+	encodedPNG := base64.StdEncoding.EncodeToString(testPNG("c2pa embedded"))
+	htmlInput := `<img src="data:image/png;base64,` + encodedPNG + `">`
+	if c2, ai, _, _ := inspectHTML([]byte(htmlInput)); !c2 || !ai {
+		t.Fatal("base64 embedded PNG was not inspected")
+	}
+	cleaned, _, err := cleanHTML([]byte(htmlInput), DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(string(cleaned)), "c2pa embedded") {
+		t.Fatal("base64 embedded PNG marker survived")
+	}
+
+	svg := `<svg xmlns="http://www.w3.org/2000/svg"><metadata>c2pa</metadata></svg>`
+	percent := url.PathEscape(svg)
+	htmlInput = `<img src="data:image/svg+xml,` + percent + `">`
+	if c2, ai, _, _ := inspectHTML([]byte(htmlInput)); !c2 || !ai {
+		t.Fatal("percent-encoded embedded SVG was not inspected")
+	}
+	cleaned, _, err = cleanHTML([]byte(htmlInput), DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cleaned), "metadata") {
+		t.Fatal("percent-encoded embedded SVG metadata survived")
+	}
+}
+
+func TestPDFStructuredScanIgnoresStreamCollisions(t *testing.T) {
+	pdf := []byte(`%PDF-1.4
+1 0 obj
+<< /Length 32 >>
+stream
+AIGC c2pa random payload
+endstream
+endobj
+%%EOF`)
+	c2, ai, findings, _ := inspectPDF(pdf)
+	if c2 || ai || len(findings) != 1 || !strings.Contains(findings[0], "no PDF") {
+		t.Fatalf("PDF stream collision was treated as metadata: c2pa=%v ai=%v findings=%v", c2, ai, findings)
+	}
+}
+
+func TestISOBMFFTruncatedByteScan(t *testing.T) {
+	data := append([]byte{0, 0, 0, 0x40, 'f', 't', 'y', 'p', 'a', 'v', 'i', 'f'}, []byte("c2pa contentcredentials")...)
+	c2, ai, findings := inspectISOBMFF(data, "avif")
+	if !c2 || !ai || len(findings) < 2 || !strings.Contains(findings[0], "byte-scan C2PA markers") || !strings.Contains(findings[1], "no ISOBMFF boxes found") {
+		t.Fatalf("truncated BMFF evidence was lost: c2pa=%v ai=%v findings=%v", c2, ai, findings)
+	}
+}
+
+func TestISOBMFFTruncatedTailIsResidualAfterClean(t *testing.T) {
+	ftyp := buildBMFFBox([]byte("ftyp"), []byte("mp42"), 8)
+	tail := append([]byte{0, 0, 0, 200, 'm', 'd', 'a', 't'}, bytes.Repeat([]byte{0}, 24)...)
+	data := append(ftyp, tail...)
+	path := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(path, data, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	result, err := CleanFile(path, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Partial || !result.StillHasAI || !containsString(result.PostFindings, "MP4 not fully inspected: preserved a truncated top-level box tail") {
+		t.Fatalf("truncated MP4 result lost residual contract: %#v", result)
+	}
+	cleaned, err := os.ReadFile(result.Output)
+	if err != nil || !bytes.Equal(cleaned, data) {
+		t.Fatalf("truncated MP4 tail was not preserved: equal=%v err=%v", bytes.Equal(cleaned, data), err)
+	}
+}
+
+func TestContainersAndZip(t *testing.T) {
+	markdown := []byte("---\ngenerator: ai-tool\ntitle: Keep me\n---\nHello\u200b world\n")
+	report := inspectContainer(markdown, "x.md", "markdown")
+	if !report.HasAIMetadata {
+		t.Fatalf("Markdown frontmatter was not detected: %#v", report)
+	}
+	cleaned, _, err := cleanContainer(markdown, "markdown", DefaultOptions())
+	if err != nil || bytes.Contains(cleaned, []byte("generator:")) || bytes.ContainsRune(cleaned, '\u200b') {
+		t.Fatalf("Markdown clean failed: %v %q", err, cleaned)
+	}
+
+	html := []byte(`<html><head><meta name="generator" content="ai"><meta name="viewport" content="width=device-width"></head><body>x` + "\u200b" + `y</body></html>`)
+	cleaned, _, err = cleanContainer(html, "html", DefaultOptions())
+	if err != nil || bytes.Contains(cleaned, []byte(`name="generator"`)) || !bytes.Contains(cleaned, []byte(`name="viewport"`)) || strings.ContainsRune(string(cleaned), '\u200b') {
+		t.Fatalf("HTML clean failed: %v %s", err, cleaned)
+	}
+	noBodyScrub := DefaultOptions()
+	noBodyScrub.AlsoLayerAText = false
+	keptHTML, _, err := cleanContainer(html, "html", noBodyScrub)
+	if err != nil || !strings.ContainsRune(string(keptHTML), '\u200b') {
+		t.Fatalf("HTML no-body-scrub option failed: %v %s", err, keptHTML)
+	}
+
+	docx := testZip(t, "docx", map[string]string{
+		"[Content_Types].xml": "types",
+		"word/document.xml":   "a\u200bb",
+		"docProps/core.xml":   `<dc:creator>OpenAI</dc:creator>`,
+		"customXml/item1.xml": `c2pa`,
+	})
+	report = inspectContainer(docx, "x.docx", "docx")
+	if !report.HasAIMetadata {
+		t.Fatalf("DOCX metadata was not detected: %#v", report)
+	}
+	cleaned, _, err = cleanContainer(docx, "docx", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		if strings.HasPrefix(strings.ToLower(f.Name), "customxml/") {
+			t.Fatalf("customXml member survived clean: %s", f.Name)
+		}
+		if f.Name == "word/document.xml" {
+			stream, openErr := f.Open()
+			if openErr != nil {
+				t.Fatalf("open cleaned OOXML body: %v", openErr)
+			}
+			body, readErr := io.ReadAll(stream)
+			stream.Close()
+			if readErr != nil || strings.ContainsRune(string(body), '\u200b') {
+				t.Fatalf("OOXML Layer A marker survived: %q, %v", body, readErr)
+			}
+		}
+	}
+}
+
+func TestEPUBOPFMetadataScrubKeepsPlainCreator(t *testing.T) {
+	opf := "<?xml version=\"1.0\"?><package><metadata><dc:creator>OpenAI</dc:creator><dc:publisher>Acme Press</dc:publisher><meta name=\"generator\" content=\"ChatGPT\"/><!-- <meta name=\"generator\" content=\"fake\"/> --><description><![CDATA[<dc:creator>keep</dc:creator>]]></description></metadata></package>"
+	data := testZip(t, "epub", map[string]string{
+		"mimetype":          "application/epub+zip",
+		"OEBPS/content.opf": opf,
+	})
+	cleaned, actions, err := cleanContainer(data, "epub", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(actions, "OEBPS/content.opf: scrub dc:creator (AI vendor name)") || !containsString(actions, "OEBPS/content.opf: drop OPF meta tag") {
+		t.Fatalf("OPF cleanup actions = %#v", actions)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []byte
+	for _, f := range zr.File {
+		if f.Name != "OEBPS/content.opf" {
+			continue
+		}
+		r, openErr := f.Open()
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		got, err = io.ReadAll(r)
+		_ = r.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	text := string(got)
+	if strings.Contains(text, "OpenAI") || strings.Contains(text, "ChatGPT") ||
+		strings.Contains(text, "<meta name=\"generator\" content=\"ChatGPT\"/>") {
+		t.Fatalf("AI OPF metadata survived: %s", text)
+	}
+	if !strings.Contains(text, "<dc:creator/>") || !strings.Contains(text, "Acme Press") ||
+		!strings.Contains(text, "<![CDATA[<dc:creator>keep</dc:creator>]]>") {
+		t.Fatalf("plain metadata or protected markup changed unexpectedly: %s", text)
+	}
+
+	plain := testZip(t, "epub", map[string]string{
+		"mimetype":          "application/epub+zip",
+		"OEBPS/content.opf": "<package><metadata><dc:creator>Jane Doe</dc:creator></metadata></package>",
+	})
+	cleaned, actions, err = cleanContainer(plain, "epub", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if containsString(actions, "scrub dc:creator (AI vendor name)") {
+		t.Fatalf("plain creator was scrubbed: %#v", actions)
+	}
+	if !bytes.Contains(cleaned, []byte("Jane Doe")) {
+		t.Fatal("plain creator did not survive")
+	}
+}
+
+func TestEPUBLayerATextIsCleanedAfterXHTMLMetadata(t *testing.T) {
+	data := testZip(t, "epub", map[string]string{
+		"mimetype":            "application/epub+zip",
+		"OEBPS/content.xhtml": "<html><body>a\u200bb</body></html>",
+	})
+	cleaned, _, err := cleanContainer(data, "epub", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		if f.Name != "OEBPS/content.xhtml" {
+			continue
+		}
+		r, openErr := f.Open()
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		body, readErr := io.ReadAll(r)
+		_ = r.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if strings.ContainsRune(string(body), '\u200b') {
+			t.Fatalf("EPUB XHTML Layer A marker survived: %q", body)
+		}
+	}
+}
+
+func TestOOXMLBodyPartMatchingRemainsCaseSensitive(t *testing.T) {
+	data := testZip(t, "docx", map[string]string{
+		"WORD/document.XML": "a\u200bb",
+	})
+	cleaned, _, err := cleanContainer(data, "docx", DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(cleaned), int64(len(cleaned)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		if f.Name != "WORD/document.XML" {
+			continue
+		}
+		r, openErr := f.Open()
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		body, readErr := io.ReadAll(r)
+		_ = r.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if !strings.ContainsRune(string(body), '\u200b') {
+			t.Fatal("case-variant OOXML body part was unexpectedly scrubbed")
+		}
+	}
+}
+
+func TestGIFICCApplicationControlIsPreservedWhenStrippingAll(t *testing.T) {
+	data := testGIFApplication("ICCRGBG1012", []byte{1, 2, 3})
+	cleaned, actions := stripGIF(data, true)
+	if !bytes.Equal(cleaned, data) {
+		t.Fatalf("ICC application control block was removed: actions=%v", actions)
+	}
+}
+
+func TestDirectoryCleanPreservesLayoutAndUnknowns(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "source")
+	if err := os.MkdirAll(filepath.Join(root, "nested"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	marked := filepath.Join(root, "nested", "note.txt")
+	if err := os.WriteFile(marked, []byte("a\u200bb\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	unknown := filepath.Join(root, "data.bin")
+	if err := os.WriteFile(unknown, []byte{0, 1, 2, 3}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("nested/note.txt", filepath.Join(root, "link.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	summary, err := CleanDirectory(root, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Output != root+".cleaned" || summary.Files != 3 || summary.Changed != 1 || summary.Errors != 0 {
+		t.Fatalf("unexpected summary: %#v", summary)
+	}
+	cleaned, err := os.ReadFile(filepath.Join(summary.Output, "nested", "note.txt"))
+	if err != nil || string(cleaned) != "ab\n" {
+		t.Fatalf("cleaned nested file = %q, err=%v", cleaned, err)
+	}
+	unknownCopy, err := os.ReadFile(filepath.Join(summary.Output, "data.bin"))
+	if err != nil || !bytes.Equal(unknownCopy, []byte{0, 1, 2, 3}) {
+		t.Fatalf("unknown file was not copied unchanged: %x, err=%v", unknownCopy, err)
+	}
+	target, err := os.Readlink(filepath.Join(summary.Output, "link.txt"))
+	if err != nil || target != "nested/note.txt" {
+		t.Fatalf("symlink was not preserved: %q, err=%v", target, err)
+	}
+	if _, err := CleanDirectory(root, Options{OutputDir: filepath.Join(root, "inside")}); err == nil {
+		t.Fatal("output directory inside source was accepted")
+	}
+}
+
+func TestDirectoryCleanTreatsExplicitAutoLikeDefault(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "source")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	unknown := filepath.Join(root, "data.bin")
+	if err := os.WriteFile(unknown, []byte{0, 1, 2}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts := DefaultOptions()
+	opts.ForceType = "auto"
+	summary, err := CleanDirectory(root, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copied, err := os.ReadFile(filepath.Join(summary.Output, "data.bin"))
+	if err != nil || !bytes.Equal(copied, []byte{0, 1, 2}) {
+		t.Fatalf("explicit auto did not preserve unknown file: %x, err=%v", copied, err)
+	}
+}
+
+func TestInPlaceBackupAndUnknownRefusal(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("x\u200by"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	opts := DefaultOptions()
+	opts.InPlace = true
+	result, err := CleanFile(path, opts)
+	if err != nil || !result.Changed {
+		t.Fatalf("in-place clean failed: %#v, %v", result, err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "xy" {
+		t.Fatalf("in-place output = %q", got)
+	}
+	if got, _ := os.ReadFile(path + ".bak"); string(got) != "x\u200by" {
+		t.Fatalf("backup output = %q", got)
+	}
+	unknown := filepath.Join(dir, "unknown.bin")
+	if err := os.WriteFile(unknown, []byte{0, 1, 2}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CleanFile(unknown, DefaultOptions()); err == nil {
+		t.Fatal("unknown format was auto-cleaned")
+	}
+}
+
+func TestExistingBackupSymlinkIsPreserved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("x\u200by"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	bak := path + ".bak"
+	if err := os.Symlink("missing-original", bak); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	opts := DefaultOptions()
+	opts.InPlace = true
+	if _, err := CleanFile(path, opts); err != nil {
+		t.Fatal(err)
+	}
+	target, err := os.Readlink(bak)
+	if err != nil || target != "missing-original" {
+		t.Fatalf("existing backup symlink changed: %q, %v", target, err)
+	}
+}
+
+func TestAudioValidationHappensBeforeBackup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "clip.mp4")
+	data := buildBMFFBox([]byte("ftyp"), []byte("mp42"), 8)
+	if err := os.WriteFile(path, data, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	opts := DefaultOptions()
+	opts.InPlace = true
+	opts.AudioRemix = true
+	if _, err := CleanFile(path, opts); err == nil {
+		t.Fatal("video audio remix was accepted")
+	}
+	if _, err := os.Lstat(path + ".bak"); !os.IsNotExist(err) {
+		t.Fatalf("invalid audio remix left backup behind: %v", err)
+	}
+}
+
+func TestHTTPAPI(t *testing.T) {
+	server := httptest.NewServer(NewHTTPHandler("secret"))
+	defer server.Close()
+	get, err := http.Get(server.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if get.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthorized health status = %d", get.StatusCode)
+	}
+	get.Body.Close()
+	healthRequest, _ := http.NewRequest(http.MethodGet, server.URL+"/health", nil)
+	healthRequest.Header.Set("Authorization", "Bearer secret")
+	healthResponse, err := http.DefaultClient.Do(healthRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if healthResponse.StatusCode != http.StatusOK {
+		t.Fatalf("health status = %d", healthResponse.StatusCode)
+	}
+	healthResponse.Body.Close()
+	unauthorized, err := http.Post(server.URL+"/capabilities", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unauthorized.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d", unauthorized.StatusCode)
+	}
+	unauthorized.Body.Close()
+
+	data := base64.StdEncoding.EncodeToString(testPNG("c2pa generated"))
+	body, _ := json.Marshal(map[string]any{"file": data, "name": "note.png"})
+	request, _ := http.NewRequest(http.MethodPost, server.URL+"/clean", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer secret")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("clean status = %d: %s", response.StatusCode, payload)
+	}
+	var decoded struct {
+		OK      bool           `json:"ok"`
+		Cleaned string         `json:"cleaned"`
+		Report  map[string]any `json:"report"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		t.Fatal(err)
+	}
+	cleaned, err := base64.StdEncoding.DecodeString(decoded.Cleaned)
+	if err != nil || !decoded.OK || bytes.Contains(bytes.ToLower(cleaned), []byte("c2pa")) {
+		t.Fatalf("unexpected API clean response: %#v, %q, %v", decoded, cleaned, err)
+	}
+	if decoded.Report["still_has_c2pa"] != false {
+		t.Fatalf("HTTP image clean report omitted residual verdict: %#v", decoded.Report)
+	}
+	detectImageRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/detect", bytes.NewReader(body))
+	detectImageRequest.Header.Set("Content-Type", "application/json")
+	detectImageRequest.Header.Set("Authorization", "Bearer secret")
+	detectImageResponse, err := http.DefaultClient.Do(detectImageRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var detectImageDecoded struct {
+		Detections []map[string]any `json:"detections"`
+	}
+	if err := json.NewDecoder(detectImageResponse.Body).Decode(&detectImageDecoded); err != nil {
+		detectImageResponse.Body.Close()
+		t.Fatal(err)
+	}
+	detectImageResponse.Body.Close()
+	if len(detectImageDecoded.Detections) != 1 || detectImageDecoded.Detections[0]["detector"] != "synthid" || detectImageDecoded.Detections[0]["available"] != false {
+		t.Fatalf("HTTP image detect report = %#v", detectImageDecoded.Detections)
+	}
+
+	inspectBody, _ := json.Marshal(map[string]any{
+		"file": base64.StdEncoding.EncodeToString([]byte("a\u200bb")), "name": "note.txt",
+	})
+	inspectRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/inspect", bytes.NewReader(inspectBody))
+	inspectRequest.Header.Set("Content-Type", "application/json")
+	inspectRequest.Header.Set("Authorization", "Bearer secret")
+	inspectResponse, err := http.DefaultClient.Do(inspectRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inspectDecoded struct {
+		Report map[string]any `json:"report"`
+	}
+	if err := json.NewDecoder(inspectResponse.Body).Decode(&inspectDecoded); err != nil {
+		inspectResponse.Body.Close()
+		t.Fatal(err)
+	}
+	inspectResponse.Body.Close()
+	if got, _ := inspectDecoded.Report["suspicious_total"].(float64); got != 1 {
+		t.Fatalf("HTTP text report was not flattened: %#v", inspectDecoded.Report)
+	}
+
+	unknownBody, _ := json.Marshal(map[string]any{
+		"file": base64.StdEncoding.EncodeToString([]byte("no magic")), "name": "../../input",
+	})
+	unknownRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/inspect", bytes.NewReader(unknownBody))
+	unknownRequest.Header.Set("Content-Type", "application/json")
+	unknownRequest.Header.Set("Authorization", "Bearer secret")
+	unknownResponse, err := http.DefaultClient.Do(unknownRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var unknownDecoded struct {
+		Name   string         `json:"name"`
+		Report map[string]any `json:"report"`
+	}
+	if err := json.NewDecoder(unknownResponse.Body).Decode(&unknownDecoded); err != nil {
+		unknownResponse.Body.Close()
+		t.Fatal(err)
+	}
+	unknownResponse.Body.Close()
+	if _, ok := unknownDecoded.Report["note"]; !ok {
+		t.Fatalf("unknown HTTP report did not expose note: %#v", unknownDecoded.Report)
+	}
+
+	textBody, _ := json.Marshal(map[string]any{"file": base64.StdEncoding.EncodeToString([]byte("a\u200bb")), "name": "note.txt"})
+	textRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/clean", bytes.NewReader(textBody))
+	textRequest.Header.Set("Content-Type", "application/json")
+	textRequest.Header.Set("Authorization", "Bearer secret")
+	textResponse, err := http.DefaultClient.Do(textRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	textResponse.Body.Close()
+	if textResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unconfigured text Layer B status = %d, want 400", textResponse.StatusCode)
+	}
+
+	detectBody, _ := json.Marshal(map[string]any{"file": base64.StdEncoding.EncodeToString([]byte("a long text sample")), "name": "note.txt"})
+	detectRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/detect", bytes.NewReader(detectBody))
+	detectRequest.Header.Set("Content-Type", "application/json")
+	detectRequest.Header.Set("Authorization", "Bearer secret")
+	detectResponse, err := http.DefaultClient.Do(detectRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer detectResponse.Body.Close()
+	if detectResponse.StatusCode != http.StatusOK {
+		t.Fatalf("detect status = %d", detectResponse.StatusCode)
+	}
+	var detectDecoded struct {
+		OK         bool             `json:"ok"`
+		Suspicious map[string]any   `json:"suspicious"`
+		Detections []map[string]any `json:"detections"`
+	}
+	if err := json.NewDecoder(detectResponse.Body).Decode(&detectDecoded); err != nil {
+		t.Fatal(err)
+	}
+	if !detectDecoded.OK || len(detectDecoded.Detections) == 0 {
+		t.Fatalf("unexpected detect response: %#v", detectDecoded)
+	}
+	if _, ok := detectDecoded.Suspicious["classes"]; !ok {
+		t.Fatalf("detect response did not include structured suspicious evidence: %#v", detectDecoded.Suspicious)
+	}
+
+	layerAOptionsBody, _ := json.Marshal(map[string]any{
+		"file":    base64.StdEncoding.EncodeToString([]byte("a\u200bb")),
+		"name":    "note.txt",
+		"options": map[string]any{"layer_a_only": true},
+	})
+	layerARequest, _ := http.NewRequest(http.MethodPost, server.URL+"/clean", bytes.NewReader(layerAOptionsBody))
+	layerARequest.Header.Set("Content-Type", "application/json")
+	layerARequest.Header.Set("Authorization", "Bearer secret")
+	layerAResponse, err := http.DefaultClient.Do(layerARequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var layerADecoded struct {
+		OK      bool           `json:"ok"`
+		Cleaned string         `json:"cleaned"`
+		Report  map[string]any `json:"report"`
+	}
+	if err := json.NewDecoder(layerAResponse.Body).Decode(&layerADecoded); err != nil {
+		layerAResponse.Body.Close()
+		t.Fatal(err)
+	}
+	layerAResponse.Body.Close()
+	layerABytes, err := base64.StdEncoding.DecodeString(layerADecoded.Cleaned)
+	if err != nil || !layerADecoded.OK || strings.ContainsRune(string(layerABytes), '\u200b') {
+		t.Fatalf("unexpected explicit Layer A-only response: %#v %q %v", layerADecoded, layerABytes, err)
+	}
+	if got, _ := layerADecoded.Report["length"].(float64); got != 2 {
+		t.Fatalf("HTTP text clean report length = %v, want 2: %#v", got, layerADecoded.Report)
+	}
+
+	trailingRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/detect", strings.NewReader(`{"file":"bad"} {"extra":true}`))
+	trailingRequest.Header.Set("Content-Type", "application/json")
+	trailingRequest.Header.Set("Authorization", "Bearer secret")
+	trailingResponse, err := http.DefaultClient.Do(trailingRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trailingResponse.Body.Close()
+	if trailingResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("trailing JSON status = %d, want 400", trailingResponse.StatusCode)
+	}
+
+	batchBody, _ := json.Marshal(map[string]any{"files": []map[string]any{{"file": data, "name": "note.png"}}})
+	batchRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/detect/batch", bytes.NewReader(batchBody))
+	batchRequest.Header.Set("Content-Type", "application/json")
+	batchRequest.Header.Set("Authorization", "Bearer secret")
+	batchResponse, err := http.DefaultClient.Do(batchRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer batchResponse.Body.Close()
+	if batchResponse.StatusCode != http.StatusOK {
+		t.Fatalf("detect batch status = %d", batchResponse.StatusCode)
+	}
+	var batchDecoded struct {
+		OK      bool          `json:"ok"`
+		Results []apiResponse `json:"results"`
+	}
+	if err := json.NewDecoder(batchResponse.Body).Decode(&batchDecoded); err != nil {
+		t.Fatal(err)
+	}
+	if !batchDecoded.OK || len(batchDecoded.Results) != 1 || batchDecoded.Results[0].Detections == nil || len(*batchDecoded.Results[0].Detections) == 0 {
+		t.Fatalf("unexpected detect batch response: %#v", batchDecoded)
+	}
+}
+
+func TestHTTPAPIReadsServerEnvironment(t *testing.T) {
+	t.Setenv("WATERMARKS_SERVER_API_KEY", "env-secret")
+	t.Setenv("WATERMARKS_SERVER_VERSION", "env-version")
+	handler := NewHTTPHandler("")
+
+	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("environment-configured health status = %d", response.Code)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/health", nil)
+	request.Header.Set("Authorization", "Bearer env-secret")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("authorized environment-configured health status = %d", response.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["version"] != "env-version" {
+		t.Fatalf("health version = %#v", body["version"])
+	}
+	if _, present := body["service"]; present {
+		t.Fatalf("health unexpectedly contains service field: %#v", body)
+	}
+}

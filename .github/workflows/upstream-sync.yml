@@ -1,0 +1,55 @@
+name: Upstream sync watch
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read upstream main
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git ls-remote https://github.com/guillaumemeyer/watermarks-remover.git refs/heads/main | awk '{print $1}')"
+          test "${#sha}" -eq 40
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Update tracking pointer
+        id: update
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="${{ steps.upstream.outputs.sha }}"
+          old="$(sed -n 's/^upstream_head: *//p' UPSTREAM.md | head -n1)"
+          if [[ "$old" == "$sha" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ./scripts/update-upstream-ref.sh "$sha"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Open sync PR
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: track upstream ${{ steps.upstream.outputs.sha }}"
+          branch: automation/upstream-sync
+          delete-branch: true
+          title: "chore: sync upstream watermarks-remover"
+          body: |
+            Upstream `main` moved to `${{ steps.upstream.outputs.sha }}`.
+
+            Review the upstream diff, port behavior according to `UPSTREAM.md`,
+            update `ROADMAP.md`, and run the complete Go test/smoke suite before
+            merging. This PR intentionally updates the tracking pointer only.
+          labels: upstream-sync

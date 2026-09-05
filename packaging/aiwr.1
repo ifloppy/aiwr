@@ -1,0 +1,48 @@
+.TH AIWR 1
+.SH NAME
+aiwr \- inspect and clean AI watermark and provenance metadata
+.SH SYNOPSIS
+.B aiwr
+.I command
+.RI [ options ] " path ..."
+.SH DESCRIPTION
+.B aiwr
+is a Go command-line tool for inspecting and cleaning deterministic Unicode
+marks, file metadata, provenance containers, and optional watermark backends.
+It defaults to writing a new output and never overwrites an input unless
+.B --in-place
+is explicitly selected.
+.SH COMMANDS
+.TP
+.B clean
+Clean a file, directory, or batch of files.
+.TP
+.B inspect
+Inspect a file or directory without modifying it.
+.TP
+.B detect
+Emit detection-oriented output.
+.TP
+.B audit
+Audit a directory and optionally emit JSON or SARIF.
+.TP
+.B clean-text
+Clean text from a path or stdin.
+.TP
+.B serve
+Run the local HTTP API.
+.SH DIRECTORY OUTPUT
+A directory is written to a sibling directory named
+.I DIRECTORY.cleaned
+with relative names, modes, and symbolic links preserved. Unchanged files may
+use reflink when supported and selected with
+.B --reflink auto
+or
+.B --reflink always.
+.SH EXIT STATUS
+0 means success without actionable residuals, 1 means a finding or residual,
+2 means invalid arguments or refusal, and 3 means partial batch failure.
+.SH SEE ALSO
+.BR aiwr (1)
+.SH AUTHOR
+aiwr contributors

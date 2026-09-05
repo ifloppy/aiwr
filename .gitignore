@@ -1,0 +1,15 @@
+/aiwr
+/dist/
+.upstream/
+*.cleaned.*
+*.rewritten.*
+*.bak
+.env
+.DS_Store
+__pycache__/
+.pytest_cache/
+.venv/
+.firecrawl/
+.figlet/
+posts.md
+stealer/prompts/
