@@ -35,10 +35,17 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
-    groups:
-      optional-backends:
-        patterns:
-          - "*"
+    # These packages are compatibility-coupled to pinned research checkouts.
+    # Dependabot cannot validate runtime compatibility, so upgrades require a
+    # coordinated manual review rather than independent or grouped PRs.
+    ignore:
+      - dependency-name: "diffusers"
+      - dependency-name: "transformers"
+      - dependency-name: "tokenizers"
+      - dependency-name: "huggingface-hub"
+      - dependency-name: "huggingface_hub"
+      - dependency-name: "sentence-transformers"
+      - dependency-name: "torch"
 
   # Docker base image (Dockerfile.synthid): tracks the digest-pinned
   # python:3.11-slim base. Monthly — digest churn is low-signal weekly.
