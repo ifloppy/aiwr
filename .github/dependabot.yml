@@ -10,6 +10,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   # Root dev/test dependencies (requirements-dev.txt: pytest, pip-audit).
   - package-ecosystem: "pip"
@@ -31,6 +35,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
+    groups:
+      optional-backends:
+        patterns:
+          - "*"
 
   # Docker base image (Dockerfile.synthid): tracks the digest-pinned
   # python:3.11-slim base. Monthly — digest churn is low-signal weekly.
