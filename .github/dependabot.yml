@@ -50,7 +50,7 @@ updates:
   # Docker base image (Dockerfile.synthid): tracks the digest-pinned
   # python:3.11-slim base. Monthly — digest churn is low-signal weekly.
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "/service"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
