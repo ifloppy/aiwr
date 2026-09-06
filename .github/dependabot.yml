@@ -48,9 +48,13 @@ updates:
       - dependency-name: "torch"
 
   # Docker base image (Dockerfile.synthid): tracks the digest-pinned
-  # python:3.11-slim base. Monthly — digest churn is low-signal weekly.
+  # Python bases. The Dockerfiles intentionally use different Python versions
+  # for different backends, so a directory-wide automatic update can silently
+  # move the CtrlRegen image off its required Python 3.11 base.
   - package-ecosystem: "docker"
     directory: "/service"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "python"
