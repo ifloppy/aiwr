@@ -185,7 +185,27 @@ def _threshold_from_config(config: Path) -> float | None:
 
 
 def _resolve_config(upstream: Path, alg: str, config: str | None) -> Path:
-    path = Path(config).expanduser().resolve() if config else upstream / "config" / f"{alg}.json"
+    config_root = (upstream / "config").resolve()
+    if config:
+        raw = Path(config).expanduser()
+        # Keep custom algorithm configs inside the checked-out MarkLLM config
+        # directory. Resolve before checking containment so traversal and
+        # symlink escapes cannot reach arbitrary host files.
+        if raw.is_absolute():
+            candidate = raw
+        elif raw.parts and raw.parts[0] == "config":
+            candidate = upstream / raw
+        else:
+            candidate = config_root / raw
+        path = candidate.resolve()
+        try:
+            path.relative_to(config_root)
+        except ValueError as e:
+            raise _Unavailable(
+                f"MarkLLM config must be inside {config_root}: {path}"
+            ) from e
+    else:
+        path = config_root / f"{alg}.json"
     if not path.is_file():
         raise _Unavailable(f"MarkLLM config not found: {path}")
     try:

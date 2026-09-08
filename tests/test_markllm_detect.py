@@ -279,7 +279,7 @@ def test_cli_detect_offline_flag(tmp_path: Path):
 
 def test_cli_config_too_large(tmp_path: Path):
     upstream = _make_fake_upstream(tmp_path)
-    big = tmp_path / "huge.json"
+    big = upstream / "config" / "huge.json"
     big.write_bytes(b"x" * (1024 * 1024 + 1))
     f = tmp_path / "t.txt"
     f.write_text("hello world")
@@ -295,6 +295,28 @@ def test_cli_config_too_large(tmp_path: Path):
     )
     assert r.returncode == 3
     assert "too large" in (r.stderr or "")
+
+
+def test_cli_config_rejects_path_outside_checkout(tmp_path: Path):
+    upstream = _make_fake_upstream(tmp_path)
+    outside = tmp_path / "outside.json"
+    outside.write_text(KGW_CONFIG)
+    f = tmp_path / "t.txt"
+    f.write_text("hello world")
+
+    r = _run_adapter(
+        "detect",
+        str(f),
+        "--scheme",
+        "kgw",
+        "--config",
+        str(outside),
+        "--upstream-dir",
+        str(upstream),
+    )
+
+    assert r.returncode == 3
+    assert "must be inside" in (r.stderr or "")
 
 
 def test_cli_watermark_json_success(tmp_path: Path):
