@@ -191,7 +191,7 @@ snapshot:
 
 release:
   github:
-    owner: iruanp
+    owner: ifloppy
     name: aiwr
 
 changelog:
