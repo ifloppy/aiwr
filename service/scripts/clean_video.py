@@ -8,8 +8,8 @@ through the same pixel-domain remover used for images (CtrlRegen or
 DiffusionPurification), and remuxes the purified frames with the original audio,
 preserving source frame timing.
 
-ffmpeg is a runtime dependency of the service image (installed in the
-Dockerfile); the purification backend is still an optional external GPU checkout.
+ffmpeg is a runtime dependency of the native service image; the purification
+backend is still an optional external GPU checkout.
 When ffmpeg or the backend is absent this reports ``available: False`` and
 performs no work -- it never silently returns a partially-purified video.
 """

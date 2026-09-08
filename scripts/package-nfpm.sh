@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 go_bin=${GO:-go}
 nfpm_bin=${NFPM:-nfpm}
 format=${1:-all}
-version=${VERSION:-$(awk -F'"' '/^const Version = / {print $2; exit}' "$repo_root/internal/core/server.go")}
+version=${VERSION:-$(awk -F'"' '/^(const|var) Version = / {print $2; exit}' "$repo_root/internal/core/server.go")}
 target_goarch=${TARGET_GOARCH:-$("$go_bin" env GOARCH)}
 
 if ! command -v "$nfpm_bin" >/dev/null 2>&1; then
@@ -45,7 +45,8 @@ export VERSION="$version" NFPM_ARCH="$nfpm_arch" SOURCE_DATE_EPOCH
 
 mkdir -p "$repo_root/dist/nfpm"
 GOOS=linux GOARCH="$target_goarch" CGO_ENABLED=0 \
-    "$go_bin" build -trimpath -ldflags="-s -w" \
+    "$go_bin" build -trimpath \
+    -ldflags="-s -w -X github.com/iruanp/aiwr/internal/core.Version=$version" \
     -o "$repo_root/dist/nfpm/aiwr" "$repo_root/cmd/aiwr"
 
 cd "$repo_root"

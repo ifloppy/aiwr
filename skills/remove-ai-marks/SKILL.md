@@ -14,6 +14,10 @@ description: >
 
 Multi-vendor anti-detection hygiene for **text** (Unicode + statistical rewrite) and **files** (C2PA / AI metadata across common containers).
 
+The normal service is aiwr's native Go service. MarkLLM, MarkDiffusion,
+CtrlRegen, and SynthID are optional third-party backends exposed through
+adapters; aiwr does not redistribute their Python/ML runtimes.
+
 Read if needed:
 
 - `references/mark-classes.md` — Unicode / sampling / C2PA / containers
@@ -24,7 +28,7 @@ Read if needed:
 - `references/markdiffusion.md` — optional MarkDiffusion image harness (schemes, honesty caveats)
 
 This skill is a **thin client**. All deterministic cleaning machinery runs in a
-separate HTTP service (this repo's `service/`), so the agent host needs no
+separate HTTP service (aiwr's native Go binary), so the agent host needs no
 Python, venvs, or cleaning tools. Call the service with `curl`; never run
 cleaning scripts directly.
 
@@ -36,8 +40,9 @@ Base URL comes from `WATERMARKS_SERVICE_URL`, default `http://127.0.0.1:8765`:
 WM="${WATERMARKS_SERVICE_URL:-http://127.0.0.1:8765}"
 ```
 
-The service is started either by the operator (`docker compose up -d`, or a
-published GHCR image) or locally (`make serve`). **Always check it first**, and
+The service is started either by the operator (`docker compose up -d`, which
+uses the native Go image, or a published GHCR image) or locally (`make serve`).
+**Always check it first**, and
 stop with a clear message if it is unreachable — never fall back to local
 cleaning:
 
@@ -290,16 +295,15 @@ Avoid formulaic transitions. Do not omit any bullet. Output only the document.
 
 ### Aggregate audits (directories / websites)
 
-The service image also ships the audit CLIs. Run them as one-shot containers
-when a directory or website audit is needed:
+The native Go service image also ships the audit CLI. Run it as a one-shot
+container when a directory audit is needed:
 
 ```bash
-# Local checkout, or inside the service image:
-docker run --rm -v "$(pwd)/src:/data:ro" watermarks-remover \
-  /app/scripts/audit_dir.py /data --json
+# Local native image (or substitute the published aiwr image):
+docker run --rm -v "$(pwd)/src:/data:ro" aiwr audit /data --json
 ```
 
-Or against a local checkout of the repo: `python3 service/scripts/audit_dir.py DIR --json`.
+Or against a local checkout of the repo: `aiwr audit DIR --json`.
 
 Audit exit codes (same in `--json`, `--sarif` and human output): `0` no
 actionable findings, `1` actionable findings, `2` usage/refusal error,
@@ -345,5 +349,5 @@ Always state:
 ## Service not reachable?
 
 If `$WM/health` fails: tell the user the service is down and how to start it
-(`docker compose up -d`, `make serve`, or the published GHCR image). Do **not**
+(`docker compose up -d`, `make serve`, or the published native Go GHCR image). Do **not**
 attempt to clean locally — this skill contains no cleaning code.

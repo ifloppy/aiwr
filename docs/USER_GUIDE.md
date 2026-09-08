@@ -136,10 +136,16 @@ complete page.
 
 `score-synthid`, `synthid-score-server`, `synthid-text-server`,
 `detect-text-watermark`, `markdiffusion`, `clean-ctrlregen`, and
-`bench-synthid-text` are compatibility adapters. Source checkouts use the
-bundled `service/scripts` when present; select another directory with
-`--upstream-scripts PATH` or `AIWR_UPSTREAM_SCRIPTS`. Adapters do not download
-code or weights automatically.
+`bench-synthid-text` are optional adapters, not bundled algorithms. A source
+checkout contains the adapter scripts; installed binaries need an explicit
+adapter directory via `--upstream-scripts PATH` or `AIWR_UPSTREAM_SCRIPTS`.
+You must separately install/configure the third-party checkout, Python
+environment, model, or sidecar required by the selected adapter. Adapters do
+not download code, weights, Torch, Transformers, or Diffusers automatically.
+
+In particular, aiwr integrates optional MarkLLM and MarkDiffusion backends but
+does not reimplement or redistribute their ML runtimes. Missing backends are
+reported as unavailable.
 
 ## 7. Website auditing
 
@@ -180,6 +186,10 @@ The service provides `/health`, `/capabilities`, `/openapi.json`, `/inspect`,
 `/detect`, `/clean`, `/watermark`, and batch variants. File requests use
 base64; `/watermark` also accepts text. The service is loopback-only by
 default. Configure authentication before exposing it to another host.
+
+The repository's optional Docker image and `compose.yaml` run the native Go
+binary with the same API. Compose is a minimal service example, not a research
+stack; it does not build or pull third-party ML images.
 
 ## 9. Development and limits
 

@@ -19,10 +19,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [python]
+        language: [go, python]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: github/codeql-action/init@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3
         with:
           languages: ${{ matrix.language }}
+      - if: matrix.language == 'go'
+        uses: github/codeql-action/autobuild@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3
       - uses: github/codeql-action/analyze@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3

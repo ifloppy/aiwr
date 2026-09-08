@@ -1,9 +1,8 @@
 # Dependabot configuration (https://docs.github.com/code-security/dependabot)
 version: 2
 updates:
-  # GitHub Actions: keeps the SHA pins in .github/workflows/ fresh. All action
-  # references are SHA-pinned, so dependabot is the mechanism that rotates them
-  # when upstream releases new versions.
+  # GitHub Actions: keeps workflow action references fresh. Dependabot opens
+  # PRs only; this repository has no automatic merge policy.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -15,7 +14,8 @@ updates:
         patterns:
           - "*"
 
-  # Root dev/test dependencies (requirements-dev.txt: pytest, pip-audit).
+  # Python is used by the maintained tests/reference adapters, not by the
+  # native release runtime.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -23,38 +23,19 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
 
-  # Optional reverse-SynthID scorer dependencies. NOTE: these pins are
-  # compatibility-coupled to the upstream checkout pinned in
-  # setup_synthid.sh / Dockerfile.synthid (REVERSE_SYNTHID_REF). Before merging
-  # a bump, re-verify the scorer against that upstream commit — CI's pip-audit
-  # step will flag any security regression, but functional compatibility must
-  # be checked by a human.
-  - package-ecosystem: "pip"
-    directory: "/service/scripts"
+  # Go module dependencies used by the native CLI and server.
+  - package-ecosystem: "gomod"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
-    # These packages are compatibility-coupled to pinned research checkouts.
-    # Dependabot cannot validate runtime compatibility, so upgrades require a
-    # coordinated manual review rather than independent or grouped PRs.
-    ignore:
-      - dependency-name: "diffusers"
-      - dependency-name: "transformers"
-      - dependency-name: "tokenizers"
-      - dependency-name: "huggingface-hub"
-      - dependency-name: "huggingface_hub"
-      - dependency-name: "sentence-transformers"
-      - dependency-name: "torch"
+    open-pull-requests-limit: 5
 
-  # Docker base image (Dockerfile.synthid): tracks the digest-pinned
-  # Python bases. The Dockerfiles intentionally use different Python versions
-  # for different backends, so a directory-wide automatic update can silently
-  # move the CtrlRegen image off its required Python 3.11 base.
+  # The only maintained Docker runtime is the native Go core image. Track its
+  # base images without reintroducing dependency management for removed ML
+  # backend images.
   - package-ecosystem: "docker"
     directory: "/service"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
-    ignore:
-      - dependency-name: "python"

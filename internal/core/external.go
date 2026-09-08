@@ -70,7 +70,7 @@ func externalScript(name string, opts Options) (string, string, error) {
 	}
 	dir := externalScriptsDir(opts)
 	if dir == "" {
-		return "", "", fmt.Errorf("%s adapter is not configured; use the bundled service/scripts or pass --upstream-scripts", name)
+		return "", "", fmt.Errorf("optional third-party adapter %s is not configured; provide an aiwr adapter directory with --upstream-scripts and install/configure the third-party backend yourself", name)
 	}
 	candidates := []string{dir}
 	// Accept either the upstream service/scripts directory or the repository
@@ -417,7 +417,7 @@ func markDiffusionDirectory(opts Options) string {
 func runCtrlRegen(input, output string, opts Options) (map[string]any, error) {
 	dir := ctrlregenDirectory(opts)
 	if dir == "" {
-		return map[string]any{"available": false, "error": "CtrlRegen not configured (set NOAI_WATERMARK_DIR or pass --ctrlregen-dir)"}, nil
+		return map[string]any{"available": false, "error": "CtrlRegen is a third-party backend and is not configured (install/configure it yourself, then set NOAI_WATERMARK_DIR or pass --ctrlregen-dir)"}, nil
 	}
 	if opts.CtrlRegenIntensity <= 0 || opts.CtrlRegenIntensity > 1 {
 		return nil, errors.New("CtrlRegen intensity must be in (0,1]")
@@ -442,7 +442,7 @@ func runCtrlRegen(input, output string, opts Options) (map[string]any, error) {
 func runMarkDiffusion(input, output string, opts Options) (map[string]any, error) {
 	dir := markDiffusionDirectory(opts)
 	if dir == "" {
-		return map[string]any{"available": false, "error": "MarkDiffusion not configured (set MARKDIFFUSION_DIR or pass --markdiffusion-dir)"}, nil
+		return map[string]any{"available": false, "error": "MarkDiffusion is a third-party backend and is not configured (install/configure it yourself, then set MARKDIFFUSION_DIR or pass --markdiffusion-dir)"}, nil
 	}
 	if opts.MarkDiffusionIntensity <= 0 || opts.MarkDiffusionIntensity > 1 {
 		return nil, errors.New("MarkDiffusion intensity must be in (0,1]")
@@ -531,7 +531,7 @@ func runMarkLLMExternal(text string, opts Options) map[string]any {
 		"detector": "markllm", "scheme": scheme, "vendor": "open-llm", "available": false,
 	}
 	if markllmDir == "" {
-		report["error"] = "MARKLLM_DIR not set"
+		report["error"] = "MarkLLM is a third-party backend and is not configured (install/configure it yourself, then set MARKLLM_DIR or pass --markllm-dir)"
 		return report
 	}
 	temp, err := createExternalTemp("", "markllm", ".txt", []byte(text), 0o600)

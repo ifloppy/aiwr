@@ -17,7 +17,7 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "0.1.0"
+var Version = "0.1.0"
 
 func serverVersion() string {
 	if version := strings.TrimSpace(os.Getenv("WATERMARKS_SERVER_VERSION")); version != "" {
@@ -274,8 +274,8 @@ func (s *apiServer) openapi(w http.ResponseWriter, r *http.Request) {
 	spec := map[string]any{
 		"openapi": "3.0.3",
 		"info": map[string]any{
-			"title": "watermarks-remover service", "version": serverVersion(),
-			"description": "Go reimplementation of the watermarks-remover inspection and cleaning service. File bytes are base64 encoded.",
+			"title": "aiwr service", "version": serverVersion(),
+			"description": "Native Go aiwr inspection and cleaning service. Optional research backends are external adapters. File bytes are base64 encoded.",
 		},
 		"paths": paths,
 	}

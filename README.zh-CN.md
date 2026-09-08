@@ -1,6 +1,6 @@
 # aiwr
 
-`aiwr` 是 [guillaumemeyer/watermarks-remover](https://github.com/guillaumemeyer/watermarks-remover) 的 Go 重实现与兼容镜像。它用于检查和清理自己拥有或获授权处理的内容中的可检测 Unicode 携带物和文件元数据。项目采用 MIT 许可证，见 [LICENSE](LICENSE)。
+`aiwr` 是一个轻量、跨平台的 Go CLI，用于检查和清理自己拥有或获授权处理的内容中的可检测 AI 水印携带物和来源元数据。它参考 [watermarks-remover](https://github.com/guillaumemeyer/watermarks-remover) 的行为，但正式支持的核心由本项目实现和维护。项目采用 MIT 许可证，见 [LICENSE](LICENSE)。
 
 English documentation: [README.md](README.md) · [English user guide](docs/USER_GUIDE.md)
 
@@ -11,7 +11,17 @@ English documentation: [README.md](README.md) · [English user guide](docs/USER_
 - 检查、检测、目录镜像、JSON、SARIF、stdin、暂存区检查、PostToolUse hook、HTTP API、网站审计和 stealer 研究流水线。
 - 可选 Layer B 重写：本地 Ollama 或明确授权的 OpenAI-compatible endpoint。默认构建不会下载或嵌入重型模型/GPU 依赖。
 
-仓库保留上游目录布局和兼容资产，包括 `service/scripts`、`skills`、Claude 插件、安装器、hooks、pre-commit、Docker 文件和 benchmark 入口。映射与同步规则见 [UPSTREAM.md](UPSTREAM.md)。
+仓库也保留 `service/scripts`、skills、hooks 和研究 benchmark 等兼容/参考资产，但它们不属于原生发行运行时。映射与同步边界见 [UPSTREAM.md](UPSTREAM.md)。
+
+## 责任边界
+
+### Native / bundled
+
+Go binary 和常规安装包包含确定性清理器、Unicode/元数据检查、格式路由、本地启发式检测器、CLI/HTTP 接口、审计、hook 和暂存区流程。它们不会安装 Python、Torch、Transformers、Diffusers、模型权重或外部 checkout。
+
+### Optional external backends
+
+`score-synthid`、`detect-text-watermark`、`markdiffusion`、`clean-ctrlregen`、SynthID sidecar 和 MarkLLM benchmark 都是适配器。它们只把 aiwr 参数/协议转换到操作者自行提供的第三方代码，不重实现或重新发行这些算法和 ML runtime。请用 `--upstream-scripts PATH` 或 `AIWR_UPSTREAM_SCRIPTS` 提供适配器目录，再自行安装/配置对应的上游 checkout、Python 环境、模型或 sidecar。缺少 backend 时会明确报告 unavailable，不会自动下载。
 
 ## 安装和验证
 
@@ -69,7 +79,7 @@ printf 'hello\u200bworld\n' | aiwr clean-text -
 | `download-prompts` | 下载可恢复的 prompt corpus |
 | `serve` | 默认在 `127.0.0.1:8765` 启动 HTTP 服务 |
 
-`score-synthid`、`markdiffusion`、`clean-ctrlregen`、`detect-text-watermark` 等可选研究命令会调用内置上游脚本，但仍需要相应 checkout、Python 包、模型权重或 sidecar。可用 `--upstream-scripts PATH` 或 `AIWR_UPSTREAM_SCRIPTS` 选择其它脚本目录。
+`score-synthid`、`markdiffusion`、`clean-ctrlregen`、`detect-text-watermark` 等可选研究命令会调用源码 checkout 或其它目录中的适配器脚本，但仍需要相应第三方 checkout、Python 包、模型权重或 sidecar。可用 `--upstream-scripts PATH` 或 `AIWR_UPSTREAM_SCRIPTS` 指定；普通 aiwr 安装不携带这些依赖。
 
 ## CLI 语言
 
@@ -102,6 +112,8 @@ aiwr inspect --json input.cleaned.md > after.json || test $? -eq 1
 ## HTTP API 和开发
 
 服务提供 `/health`、`/capabilities`、`/openapi.json`、`/inspect`、`/detect`、`/clean`、`/watermark` 及批量接口。文件内容使用 base64；文本 watermark 接口也接受 `text`。对外暴露前请设置 `WATERMARKS_SERVER_API_KEY` 或 `WATERMARKS_API_KEY`。请求格式、限制、鉴权和 sidecar 见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
+
+可选容器镜像和 [compose.yaml](compose.yaml) 运行同一个 Go binary。Compose 只是最小 native 服务示例，不是 research stack，不会构建或拉取 MarkLLM、MarkDiffusion、CtrlRegen 或 SynthID runtime。目前正式发布到 GHCR 的容器镜像仅面向 `linux/amd64`；原生归档和系统包仍提供 arm64。核心镜像故意不包含 Python/ML runtime；适配器应使用操作者维护的主机环境或第三方 sidecar/service。
 
 ```bash
 make format

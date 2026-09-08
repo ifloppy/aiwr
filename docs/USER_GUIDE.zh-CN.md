@@ -97,7 +97,9 @@ aiwr download-prompts --dataset allenai/c4 --config realnewslike \
 
 `stealer query` 默认 dry-run 且离线；远程模型需要显式 backend、凭据和 `--allow-remote`。prompt 下载器使用可恢复的分页 checkpoint；Ctrl-C 返回 130 并保留最近完整页。
 
-`score-synthid`、`synthid-score-server`、`synthid-text-server`、`detect-text-watermark`、`markdiffusion`、`clean-ctrlregen` 和 `bench-synthid-text` 是兼容适配器。源码 checkout 默认使用内置 `service/scripts`，也可用 `--upstream-scripts PATH` 或 `AIWR_UPSTREAM_SCRIPTS` 指定其它目录；适配器不会自动下载代码或权重。
+`score-synthid`、`synthid-score-server`、`synthid-text-server`、`detect-text-watermark`、`markdiffusion`、`clean-ctrlregen` 和 `bench-synthid-text` 是可选适配器，不是 aiwr 内置的算法。源码 checkout 包含适配器脚本；安装后的 binary 必须通过 `--upstream-scripts PATH` 或 `AIWR_UPSTREAM_SCRIPTS` 显式指定适配器目录。操作者还必须自行安装/配置所选适配器需要的第三方 checkout、Python 环境、模型或 sidecar。适配器不会自动下载代码、权重、Torch、Transformers 或 Diffusers。
+
+特别是，aiwr 可以接入 MarkLLM 和 MarkDiffusion，但不重实现或重新发行它们的 ML runtime。缺少 backend 时会报告 unavailable。
 
 ## 7. 网站审计
 
@@ -130,6 +132,8 @@ curl -H 'Authorization: Bearer change-me' \
 ```
 
 服务提供 `/health`、`/capabilities`、`/openapi.json`、`/inspect`、`/detect`、`/clean`、`/watermark` 和批量接口。文件使用 base64，`/watermark` 也接受文本；默认只监听 loopback，对外提供前请配置鉴权。
+
+仓库的可选 Docker 镜像和 `compose.yaml` 使用同一个原生 Go binary，提供相同 API。Compose 只是最小服务示例，不是 research stack，不会构建或拉取第三方 ML 镜像。
 
 ## 9. 开发和限制
 

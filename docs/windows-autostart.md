@@ -2,21 +2,22 @@
 
 Run the service silently in the background on every login, without a terminal window or manual start.
 
-## 1. Clone the repo somewhere permanent
+## 1. Install the binary somewhere permanent
 
-Replace `<path-to-clone>` below with wherever you want the repo to live (e.g. `C:\watermarks-remover` or `C:\Users\<you>\watermarks-remover`). Use the same path consistently in every step below.
+Install the Windows `aiwr.exe` release binary somewhere permanent (for example
+`C:\aiwr\aiwr.exe`) and use that path consistently below. This setup runs the
+native Go service; it does not require Python or the source checkout.
 
-```powershell
-git clone https://github.com/guillaumemeyer/watermarks-remover.git <path-to-clone>
-```
+If you are developing from a checkout, build it first with `go build -o aiwr.exe
+./cmd/aiwr` and use the resulting executable path instead.
 
 ## 2. Create a silent launcher script
 
-Save as `<path-to-clone>\start-service.vbs`:
+Save as `C:\aiwr\start-service.vbs`:
 
 ```vbscript
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "python service\scripts\server.py --host 127.0.0.1 --port 8765", 0, False
+WshShell.Run "C:\aiwr\aiwr.exe serve --host 127.0.0.1 --port 8765", 0, False
 ```
 
 ## 3. Register a scheduled task
@@ -24,16 +25,16 @@ WshShell.Run "python service\scripts\server.py --host 127.0.0.1 --port 8765", 0,
 This does **not** require Administrator privileges — `-AtLogOn` with a user-level trigger runs under your own account, so a regular PowerShell window is enough.
 
 ```powershell
-$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument '"<path-to-clone>\start-service.vbs"' -WorkingDirectory "<path-to-clone>"
+$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument '"C:\aiwr\start-service.vbs"' -WorkingDirectory "C:\aiwr"
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-Register-ScheduledTask -TaskName "WatermarksRemoverService" -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts the watermarks-remover HTTP service at login"
+Register-ScheduledTask -TaskName "AiwrService" -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts the aiwr HTTP service at login"
 ```
 
 ## 4. Start it immediately (no reboot needed)
 
 ```powershell
-Start-ScheduledTask -TaskName "WatermarksRemoverService"
+Start-ScheduledTask -TaskName "AiwrService"
 ```
 
 ## 5. Verify
@@ -46,6 +47,6 @@ Should return `{"ok": true, "version": "..."}`.
 
 ## Notes
 
-- Requires Python 3.10+ on PATH.
+- Requires the native `aiwr.exe` binary; Python is not needed.
 - The scheduled task runs at every login going forward — no manual start needed.
-- To stop auto-starting: `Unregister-ScheduledTask -TaskName "WatermarksRemoverService"`
+- To stop auto-starting: `Unregister-ScheduledTask -TaskName "AiwrService"`

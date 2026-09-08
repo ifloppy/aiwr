@@ -1,10 +1,11 @@
 # aiwr
 
-`aiwr` is a Go reimplementation and compatibility mirror of
-[guillaumemeyer/watermarks-remover](https://github.com/guillaumemeyer/watermarks-remover).
-It inspects and removes detectable Unicode carriers and file metadata from
-content that you own or are authorized to process. It is released under the
-MIT License; see [LICENSE](LICENSE).
+`aiwr` is a lightweight, cross-platform Go CLI for inspecting and cleaning
+detectable AI watermark carriers and provenance metadata from content that you
+own or are authorized to process. Its behavior is informed by
+[watermarks-remover](https://github.com/guillaumemeyer/watermarks-remover), but
+aiwr's supported core is implemented and maintained here. It is released under
+the MIT License; see [LICENSE](LICENSE).
 
 中文文档：[README.zh-CN.md](README.zh-CN.md) · [中文用户手册](docs/USER_GUIDE.zh-CN.md)
 
@@ -22,10 +23,30 @@ MIT License; see [LICENSE](LICENSE).
   OpenAI-compatible endpoint. Heavy model and GPU dependencies are not
   downloaded or embedded in the default build.
 
-The project preserves the upstream repository layout and compatibility assets,
-including `service/scripts`, `skills`, the Claude plugin, installer, hooks,
-pre-commit configuration, Docker files, and benchmark entry points. See
-[UPSTREAM.md](UPSTREAM.md) for the mapping and synchronization rules.
+The repository also keeps compatibility/reference assets such as
+`service/scripts`, skills, hooks, and research benchmarks. They are not part of
+the native release runtime. See [UPSTREAM.md](UPSTREAM.md) for the mapping and
+synchronization boundary.
+
+## Responsibility boundary
+
+### Native / bundled
+
+The Go binary and normal packages include the deterministic cleaners, Unicode
+and metadata inspection, format routing, local heuristic detectors, CLI/HTTP
+interfaces, auditing, hooks, and staging workflows. They do not install Python,
+Torch, Transformers, Diffusers, model weights, or external checkouts.
+
+### Optional external backends
+
+`score-synthid`, `detect-text-watermark`, `markdiffusion`, `clean-ctrlregen`,
+the SynthID sidecars, and the MarkLLM benchmark are adapters. They translate
+aiwr arguments/protocols to third-party code supplied by the operator; they do
+not reimplement or redistribute those algorithms or ML runtimes. Provide an
+adapter directory with `--upstream-scripts PATH` (or
+`AIWR_UPSTREAM_SCRIPTS`), then install/configure the corresponding upstream
+checkout, Python environment, model, or sidecar yourself. A missing backend is
+reported as unavailable; it is never downloaded automatically.
 
 ## Install and verify
 
@@ -90,11 +111,11 @@ intentional.
 | `serve` | Start the HTTP service on `127.0.0.1:8765` by default |
 
 Optional research commands such as `score-synthid`, `markdiffusion`,
-`clean-ctrlregen`, and `detect-text-watermark` delegate to the bundled
-upstream scripts when available. They still require the relevant external
-checkout, Python packages, model weights, or sidecar. Use
-`--upstream-scripts PATH` or `AIWR_UPSTREAM_SCRIPTS` to select another script
-directory.
+`clean-ctrlregen`, and `detect-text-watermark` delegate to adapter scripts from
+the source checkout or another directory. They still require the relevant
+third-party checkout, Python packages, model weights, or sidecar. Use
+`--upstream-scripts PATH` or `AIWR_UPSTREAM_SCRIPTS`; ordinary aiwr installs do
+not carry these dependencies.
 
 ## CLI language
 
@@ -149,6 +170,14 @@ base64 file content; the text watermark endpoint also accepts `text`. Set
 `WATERMARKS_SERVER_API_KEY` (or `WATERMARKS_API_KEY`) before exposing the
 service beyond loopback. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the
 request shape, limits, authentication, and optional sidecars.
+
+The optional container image and [compose.yaml](compose.yaml) run this same Go
+binary. Compose is only a minimal native service example; it is not a research
+stack and does not build or pull MarkLLM, MarkDiffusion, CtrlRegen, or SynthID
+runtimes. The published GHCR image currently targets `linux/amd64`; native
+archives/packages still cover arm64. The core image intentionally has no
+Python/ML runtime; use an operator-managed host environment or third-party
+sidecar for adapters.
 
 ## Development and upstream tracking
 

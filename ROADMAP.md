@@ -50,12 +50,13 @@ downloaded runtime code.
 
 ## Explicit boundaries
 
-Research commands retain their upstream entry points, but source checkouts,
-Python packages, model weights, and sidecars remain explicit dependencies.
-Source checkouts use bundled `service/scripts` by default; another script
-directory can be selected with `--upstream-scripts` or
-`AIWR_UPSTREAM_SCRIPTS`. Website audit, staged commands, hooks, stealer scoring,
-and prompt download do not require Python.
+Research commands retain their upstream entry points as optional adapters, but
+source checkouts, Python packages, model weights, and sidecars remain explicit
+operator dependencies. A source checkout may provide adapter scripts under
+`service/scripts`; installed binaries require an explicit adapter directory via
+`--upstream-scripts` or `AIWR_UPSTREAM_SCRIPTS`. aiwr does not redistribute the
+third-party ML runtimes. Website audit, staged commands, hooks, stealer
+scoring, and prompt download do not require Python.
 
 ## Non-goals
 

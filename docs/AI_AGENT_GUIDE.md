@@ -160,9 +160,11 @@ and do not blindly send binary files through a text pipeline.
 ## 6. Optional backends and network boundaries
 
 score-synthid, synthid-score-server, synthid-text-server, detect-text-watermark,
-markdiffusion, and clean-ctrlregen use the bundled service/scripts when running
-from this checkout, or an explicit --upstream-scripts checkout. They do not
-download code, weights, or dependencies automatically.
+markdiffusion, and clean-ctrlregen are optional adapters. A source checkout can
+provide the adapter scripts under service/scripts; installed binaries require
+an explicit --upstream-scripts directory. The third-party checkout, Python
+environment, weights, or sidecar must be installed/configured by the operator.
+These adapters do not download code, weights, or dependencies automatically.
 Pass through and report available:false, error, and partial instead of hiding
 them. `WATERMARKS_SYNTHID_TEXT_URL` is a network boundary: report when a
 watermark request leaves the machine.
