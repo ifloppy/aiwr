@@ -3,10 +3,7 @@ GO ?= go
 
 .PHONY: all build test vet fmt lint lint-fix format smoke smoke-synthid smoke-ctrlregen smoke-markllm smoke-markdiffusion install upstream-check package-check \
 	package-deb package-rpm package-apk package-arch package-all package-release \
-	serve compose-up compose-up-heavy compose-check docker-core-build docker-core-help \
-	docker-synthid-build docker-synthid-help docker-ctrlregen-build docker-ctrlregen-help \
-	docker-markllm-build docker-markllm-help docker-markdiffusion-build docker-markdiffusion-help \
-	bootstrap-synthid bootstrap-ctrlregen bootstrap-markllm bootstrap-markdiffusion \
+	serve compose-up compose-check docker-core-build docker-core-help \
 	bench-synthid-text bench-full bench-semantic install-skill \
 	install-claude-code-skill install-claude-code-text-skill install-claude-project-skill \
 	package-cowork-skill package-cowork-text-skill install-cursor-text-skill plugin-validate clean
@@ -86,56 +83,14 @@ package-all:
 package-release:
 	goreleaser release --snapshot --clean
 
-# Compatibility targets from the upstream repository. Core operations use the
-# Go binary; model/GPU bootstrap and one-shot images remain explicit optional
-# integrations and are never pulled in by `make all`.
-bootstrap-synthid:
-	./service/scripts/setup_synthid.sh
-
-bootstrap-ctrlregen:
-	./service/scripts/setup_ctrlregen.sh
-
-bootstrap-markllm:
-	./service/scripts/setup_markllm.sh
-
-bootstrap-markdiffusion:
-	./service/scripts/setup_markdiffusion.sh
-
 docker-core-build:
-	docker build -f service/Dockerfile -t watermarks-remover service/
+	docker build -f service/Dockerfile -t aiwr .
 
 docker-core-help:
-	docker run --rm watermarks-remover /app/scripts/server.py --help
-
-docker-synthid-build:
-	docker build -f service/Dockerfile.synthid -t watermarks-remover-synthid service/
-
-docker-synthid-help:
-	docker run --rm watermarks-remover-synthid --help
-
-docker-ctrlregen-build:
-	docker build -f service/Dockerfile.ctrlregen -t watermarks-remover-ctrlregen service/
-
-docker-ctrlregen-help:
-	docker run --rm watermarks-remover-ctrlregen --help
-
-docker-markllm-build:
-	docker build -f service/Dockerfile.markllm -t watermarks-remover-markllm service/
-
-docker-markllm-help:
-	docker run --rm watermarks-remover-markllm --help
-
-docker-markdiffusion-build:
-	docker build -f service/Dockerfile.markdiffusion -t watermarks-remover-markdiffusion service/
-
-docker-markdiffusion-help:
-	docker run --rm watermarks-remover-markdiffusion --help
+	docker run --rm aiwr --help
 
 compose-up:
 	docker compose up --build -d
-
-compose-up-heavy:
-	docker compose --profile harness --profile heavy up --build -d
 
 compose-check:
 	./compose-check.sh

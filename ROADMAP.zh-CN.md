@@ -25,7 +25,7 @@ English version: [ROADMAP.md](ROADMAP.md)。路线图跟随 `guillaumemeyer/wate
 
 ## 明确边界
 
-研究命令保留上游入口，但 checkout、Python 包、模型权重和 sidecar 仍是显式依赖。源码 checkout 默认使用内置 `service/scripts`，也可用 `--upstream-scripts` 或 `AIWR_UPSTREAM_SCRIPTS` 指定其它目录。网站审计、暂存区、hook、stealer 评分和 prompt 下载不需要 Python。
+研究命令作为可选 adapter 保留上游入口，但 checkout、Python 包、模型权重和 sidecar 仍是操作者必须显式提供的依赖。源码 checkout 可以提供 `service/scripts` 中的 adapter；安装后的 binary 必须用 `--upstream-scripts` 或 `AIWR_UPSTREAM_SCRIPTS` 显式指定目录。aiwr 不重新发行第三方 ML runtime。网站审计、暂存区、hook、stealer 评分和 prompt 下载不需要 Python。
 
 ## 不承诺
 

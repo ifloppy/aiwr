@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a defect in watermarks-remover (text/image cleaning, skill docs, or scripts)
+about: Report a defect in aiwr (native CLI/service, adapters, or docs)
 title: "[bug] "
 labels: bug
 assignees: ""
@@ -23,8 +23,8 @@ What should have happened instead.
 ## Environment
 
 - OS and arch:
-- Python version (`python3 --version`):
-- How you run the skill (Grok skill path / symlink / scripts only):
+- aiwr version (`aiwr version`):
+- How you run aiwr (native binary / `go run` / service / adapter):
 - Optional tools present (`c2patool`, `exiftool`) and versions if relevant:
 
 ## Input type
@@ -39,11 +39,9 @@ What should have happened instead.
 Paste relevant CLI output (redact private content):
 
 ```bash
-SCRIPTS=service/scripts
-python3 "$SCRIPTS/inspect_file.py" path
-# or:
-python3 "$SCRIPTS/inspect_text.py" path/or/-
-python3 "$SCRIPTS/inspect_image.py" path.png
+aiwr inspect --json path
+# or, for an explicitly configured optional adapter:
+aiwr detect-text-watermark --upstream-scripts PATH --help
 ```
 
 ## Extra context

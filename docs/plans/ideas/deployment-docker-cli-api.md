@@ -6,7 +6,12 @@ Branch context: `refactor/format-dispatch`
 
 ## Goal
 
-Simplify deployment of watermarks-remover by shipping a Docker container that
+> Superseded architecture note: the implemented image now runs the native Go
+> `aiwr` binary. Do not execute the phases below; this document is retained as
+> historical design context and its Python core/API/worker plan is not current
+> release scope.
+
+Simplify deployment of aiwr by shipping a Docker container that
 offers both a **CLI** and a persistent **HTTP API**, self-hosted via local
 image builds. Primary motivation: cut host setup friction (Python version,
 exiftool/qpdf/c2patool, OS drift) and expose the tool to non-Python consumers
@@ -25,9 +30,8 @@ through a shared multi-user service.
 
 | Image | Contents | Mode |
 | --- | --- | --- |
-| `watermarks-remover-core` | Digest-pinned `python:3.14-slim` + exiftool/qpdf/c2patool + core scripts + FastAPI server | Default: **CLI** (`docker run wm-core clean_file.py ...`). `serve` subcommand: **HTTP API** |
-| `watermarks-remover-ctrlregen` | Existing GPU image (unchanged, local build, license-safe) | **Worker** for async pixel-removal jobs |
-| `watermarks-remover-markllm` / synthid | Existing optional images | **Out of the service**. MarkLLM is a verification harness, not a user-facing capability; SynthID scorer is an optional sidecar later |
+| `ghcr.io/ifloppy/aiwr` | Multi-stage Go build + native system tools | `aiwr serve` HTTP API |
+| operator-managed backend | User's own Python/GPU environment or sidecar | Optional adapter only; never an aiwr release image |
 
 Rationale: a single all-in-one image would be a GPU-dependent megaimage and
 would collide with the never-bundle-restricted-upstream rule. The heavy
@@ -51,10 +55,10 @@ in-process:
 
 ### Phase 1 — Core image
 
-`Dockerfile.core` in the existing hardening style: digest-pinned base,
-unprivileged user, pinned pip, apt install exiftool/qpdf/c2patool. Entrypoint
-dispatches on first arg (`serve` vs script name). Makefile targets:
-`docker-core-build`, `docker-core-help`, `serve-core`.
+`service/Dockerfile` uses a multi-stage Go build, an unprivileged user, and only
+the system tools required by the native core. Its entrypoint is `aiwr` and its
+default command is `aiwr serve`. Makefile targets:
+`docker-core-build`, `docker-core-help`, and `serve`.
 
 ### Phase 2 — API server (FastAPI + uvicorn, in the core image)
 

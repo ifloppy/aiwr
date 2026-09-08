@@ -24,7 +24,7 @@ It is opt-in: if `sentence-transformers` is not installed the metric is
 `None` and renders as `—` in the report/CSV. Install it into the MarkLLM venv
 to enable the column:
 
-    ~/MarkLLM/.venv/bin/pip install -r service/scripts/requirements-semantic.txt
+    ~/MarkLLM/.venv/bin/pip install sentence-transformers
 
 Model caches must be writable: set HF_HOME to a repo-local cache (e.g.
 `$ROOT/.hf-cache`, as benchmarks/benchmark-full.sh does) - a root-owned
@@ -39,8 +39,9 @@ divergence is low (same meaning), and vice versa.
 
 Prerequisites (all external, matching the repo's optional-harness model):
 
-1. A MarkLLM checkout: run service/scripts/setup_markllm.sh (clones
-   THU-BPM/MarkLLM at a pinned commit and creates ~/MarkLLM/.venv).
+1. An operator-managed MarkLLM checkout and Python environment. Install
+   MarkLLM, Torch, and its model dependencies according to the upstream
+   project documentation; aiwr does not install or pin that runtime.
 2. A rewrite backend: Ollama (default, loopback) or any
    OpenAI-compatible endpoint. The rewrite model must be a real model.
 
@@ -203,28 +204,22 @@ chars / --chars-per-token estimates (default 4.0).
 - results.csv - one row per (doc, seed, variant) for plotting.
 - work/ - generated watermarked/unwatermarked samples (kept for inspection). In strategy mode it also holds `work/strategies/<strategy>/` - one directory per evaluated strategy candidate with `input_<doc>_seed<seed>.txt` and `output_<doc>_seed<seed>.txt` side by side, so each combination's rewritten result can be inspected against its input. Controlled by `--write-strategy-outputs` (default on; `--no-write-strategy-outputs` to disable).
 
-## Running from Docker (compose)
+## Running with an external environment
 
-The `wr-markllm` service in compose.yaml can run the benchmark end-to-end
-(image: pinned MarkLLM checkout at /opt/markllm + all scripts). The image
-installs CPU torch by design, so use it for portability/CI, not for GPU
-throughput on this machine — for GPU runs use the host `setup_markllm.sh`
-venv instead (see README).
+The benchmark is intentionally not a Compose or aiwr-image workload. Run the
+adapter script with the Python environment that the operator created for the
+third-party MarkLLM checkout:
 
 ```bash
-docker compose --profile harness build wr-markllm
-docker compose run --rm wr-markllm \
-  /app/bench_synthid_text.py --markllm-dir /opt/markllm \
-  --corpus /bench-corpus --out-dir /data --tag docker-run \
+python service/scripts/bench_synthid_text.py \
+  --markllm-dir "$MARKLLM_DIR" \
+  --corpus benchmarks/corpus-large --out-dir ./bench-out --tag local-run \
   --docs 10 --seeds 3 --variants "paraphrase:3,backtranslate:3" \
   --restamp-control
 ```
 
-Env (rewrite backend) is wired from your .env via compose interpolation;
-results land in the `bench-out` volume (/data); the bundled
-corpus is mounted read-only at /bench-corpus. The image runs the
-persistent MarkLLM serve worker by default, so the ~2-4h one-shot runs
-are not a constraint inside the container either.
+The benchmark and its model/runtime remain research assets, not formal aiwr
+release contents.
 
 ## What it can and cannot claim
 

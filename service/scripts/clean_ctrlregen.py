@@ -135,12 +135,15 @@ def main() -> int:
         from PIL import Image
     except ImportError as e:
         print(f"CtrlRegen dependencies missing: {e}", file=sys.stderr)
-        print("run setup_ctrlregen.sh first", file=sys.stderr)
+        print(
+            "install the third-party CtrlRegen environment yourself before running this adapter",
+            file=sys.stderr,
+        )
         return 3
 
     if not is_ctrlregen_available():
         print(
-            "CtrlRegen dependencies not installed; run setup_ctrlregen.sh first",
+            "CtrlRegen dependencies not installed; configure the operator-managed third-party environment first",
             file=sys.stderr,
         )
         return 3

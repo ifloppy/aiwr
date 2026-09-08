@@ -24,3 +24,30 @@ jobs:
       - run: go test -race ./...
       - run: make smoke
       - run: make package-check
+
+  docker-core:
+    name: Native Docker build and smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build native core image
+        run: docker build --build-arg VERSION=ci --build-arg TARGETARCH=amd64 -f service/Dockerfile -t aiwr-ci .
+      - name: Smoke native core image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm aiwr-ci --version | grep -q 'aiwr ci'
+          test "$(docker run --rm --entrypoint /usr/bin/id aiwr-ci -u)" = "10001"
+          docker run --rm --entrypoint /bin/sh aiwr-ci -c '! command -v python3 >/dev/null 2>&1'
+
+          cid="$(docker run -d --read-only --tmpfs /tmp -p 127.0.0.1:18765:8765 aiwr-ci)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 30); do
+            if health="$(curl -fsS http://127.0.0.1:18765/health 2>/dev/null)"; then
+              grep -q '"version":"ci"' <<<"$health"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs "$cid"
+          exit 1

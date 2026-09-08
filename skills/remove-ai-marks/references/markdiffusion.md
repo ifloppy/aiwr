@@ -44,18 +44,19 @@ Nine image algorithms in two categories:
 
 ## License / hygiene
 
-Apache-2.0. Installed from PyPI at a pinned version
-(`requirements-markdiffusion.txt`) or an editable checkout at a pinned commit
-(`setup_markdiffusion.sh --checkout`). Never bundled into this repo.
+Apache-2.0. Install the upstream package or checkout in an operator-managed
+Python environment by following the upstream documentation. aiwr does not pin,
+install, bundle, or publish the MarkDiffusion runtime.
 
 ## Harness usage
 
 ```bash
 SCRIPTS=service/scripts
-MD="$HOME/markdiffusion/.venv/bin/python"
+MD="$HOME/markdiffusion/.venv/bin/python"  # operator-managed environment
 
-"$SCRIPTS/setup_markdiffusion.sh"                     # PyPI pin default
-# or: "$SCRIPTS/setup_markdiffusion.sh" --checkout    # editable pinned clone
+# Install MarkDiffusion and its torch/diffusers dependencies according to the
+# upstream project documentation. The commands below only invoke aiwr's small
+# adapter; they do not install the backend.
 
 # 1. watermark a test image with a scheme
 echo "a red fox in snow" > /tmp/prompt.txt

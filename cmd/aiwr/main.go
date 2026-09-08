@@ -40,6 +40,12 @@ Direct format commands are also available:
   audit-website, check-staged, clean-staged, hook-written-file,
   bench-synthid-text, stealer, download-prompts
 
+The native Go commands above are bundled and maintained by aiwr. The research
+commands score-synthid, detect-text-watermark, markdiffusion, clean-ctrlregen,
+synthid-*-server, and bench-synthid-text are optional adapters: they require
+your own upstream checkout, Python environment, model, or sidecar and are not
+included in the core release image.
+
 By default a file is written next to its source as NAME.cleaned.EXT. A
 directory is written to a sibling directory named DIRECTORY.cleaned, with
 relative names and subdirectories preserved. Use --in-place for a backup and
@@ -66,6 +72,11 @@ const usageChinese = `aiwr - 检查并移除 AI 水印/来源元数据
   synthid-score-server、synthid-text-server、audit-website、check-staged、
   clean-staged、hook-written-file、bench-synthid-text、stealer、
   download-prompts
+
+上面的原生 Go 命令随 aiwr 提供并由本项目维护。score-synthid、
+detect-text-watermark、markdiffusion、clean-ctrlregen、synthid-*-server 和
+bench-synthid-text 是可选适配器：需要用户自行提供上游 checkout、Python
+环境、模型或 sidecar，不包含在 core release image 中。
 
 默认会将文件写到源文件旁的 NAME.cleaned.EXT。目录会写到相邻的
 DIRECTORY.cleaned，并保留相对路径和子目录。使用 --in-place 原地替换
@@ -98,8 +109,8 @@ func run(args []string) int {
 		return 0
 	case "version", "--version", "-v":
 		fmt.Printf("%s\n", cliText(
-			fmt.Sprintf("aiwr %s (Go reimplementation of watermarks-remover)", core.Version),
-			fmt.Sprintf("aiwr %s（watermarks-remover 的 Go 重实现）", core.Version),
+			fmt.Sprintf("aiwr %s (native Go CLI)", core.Version),
+			fmt.Sprintf("aiwr %s（原生 Go CLI）", core.Version),
 		))
 		return 0
 	case "clean", "clean-file", "clean_file":
@@ -407,12 +418,12 @@ func printExternalHelp(scriptName string) {
 	name := strings.ReplaceAll(command, "_", "-")
 	fmt.Fprintf(os.Stdout, "aiwr %s\n\n", name)
 	fmt.Fprintln(os.Stdout, cliText(
-		fmt.Sprintf("This command delegates to upstream %s.", scriptName),
-		fmt.Sprintf("此命令委托给上游 %s。", scriptName),
+		fmt.Sprintf("This command is an optional adapter that delegates to third-party/upstream %s; aiwr does not reimplement or redistribute its runtime.", scriptName),
+		fmt.Sprintf("此命令是可选适配器，委托给第三方/上游 %s；aiwr 不重实现或重新发行其运行时。", scriptName),
 	))
 	fmt.Fprintln(os.Stdout, cliText(
-		"Provide --upstream-scripts PATH (or set AIWR_UPSTREAM_SCRIPTS) to see and run the upstream command options.",
-		"请提供 --upstream-scripts PATH（或设置 AIWR_UPSTREAM_SCRIPTS）以查看并运行上游命令选项。",
+		"Provide --upstream-scripts PATH (or set AIWR_UPSTREAM_SCRIPTS) for the adapter scripts, then install/configure the backend described by that command.",
+		"请提供 --upstream-scripts PATH（或设置 AIWR_UPSTREAM_SCRIPTS）以使用适配器脚本，并自行安装/配置该命令所需的 backend。",
 	))
 	fmt.Fprintf(os.Stdout, "%s\n", cliText(
 		fmt.Sprintf("Usage: aiwr %s [--upstream-scripts PATH] [upstream options]", name),

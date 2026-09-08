@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Tiny stdlib HTTP sidecar exposing SynthID and research text watermarking.
 
-Runs inside the wr-markllm harness / sidecar image so the published core
-image never bundles heavy ML dependencies (PyTorch, Transformers, MarkLLM).
-The core service calls this sidecar for text watermarking when
-WATERMARKS_SYNTHID_TEXT_URL is set (see compose.yaml / .env.example).
+Runs as an operator-managed optional sidecar. The native aiwr core image never
+bundles heavy ML dependencies (PyTorch, Transformers, MarkLLM). The core
+service calls this sidecar for text watermarking when WATERMARKS_SYNTHID_TEXT_URL
+is configured by the operator; this sidecar is not part of the minimal Compose
+stack.
 
 Endpoints:
     GET  /health          -> {"ok": true, "version": ...}
@@ -12,9 +13,9 @@ Endpoints:
                           -> {"ok": true, "kind": "text", "watermarked_text": str, "report": dict}
     POST /watermark/batch -> {"files": [...]} -> {"ok": true, "results": [...]}
 
-Hardening mirrors synthid_score_server.py and server.py: optional bearer key,
-input size caps, unprivileged user, read-only rootfs with a /tmp tmpfs.
-Intended for the compose network or loopback/trusted network only.
+Hardening mirrors synthid_score_server.py and server.py: optional bearer key
+and input size caps. Run it on loopback or another trusted operator-managed
+network unless you explicitly provide appropriate isolation and authentication.
 """
 
 from __future__ import annotations

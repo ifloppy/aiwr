@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """Tiny stdlib HTTP sidecar exposing the reverse-SynthID pixel scorer.
 
-Runs inside the local-only wr-synthid heavy image so the published core
-image never bundles the non-commercial reverse-SynthID code. The core
-service calls this sidecar for SynthID image scoring when
-WATERMARKS_SYNTHID_SCORER_URL is set (see compose.yaml / .env.example).
+Runs as an operator-managed optional sidecar so the native aiwr core image
+never bundles the non-commercial reverse-SynthID code. The core service calls
+this sidecar for SynthID image scoring when WATERMARKS_SYNTHID_SCORER_URL is
+configured by the operator; this sidecar is not part of the minimal Compose
+stack.
 
 Endpoints:
     GET  /health  -> {"ok": true, "version": ...}
     POST /score   -> {"file": <base64>} -> score_synthid payload
 
-Hardening mirrors server.py: optional bearer key, input size caps,
-unprivileged user, read-only rootfs with a /tmp tmpfs. Intended for the
-compose network or a trusted network only.
+Hardening mirrors server.py: optional bearer key and input size caps. Run it
+on loopback or another trusted operator-managed network unless you explicitly
+provide appropriate isolation and authentication.
 """
 
 from __future__ import annotations
