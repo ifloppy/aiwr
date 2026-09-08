@@ -289,7 +289,7 @@ def test_cli_config_too_large(tmp_path: Path):
         "--scheme",
         "kgw",
         "--config",
-        str(big),
+        big.name,
         "--upstream-dir",
         str(upstream),
     )
@@ -316,7 +316,7 @@ def test_cli_config_rejects_path_outside_checkout(tmp_path: Path):
     )
 
     assert r.returncode == 3
-    assert "must be inside" in (r.stderr or "")
+    assert "must be a JSON file name" in (r.stderr or "")
 
 
 def test_cli_watermark_json_success(tmp_path: Path):

@@ -187,23 +187,24 @@ def _threshold_from_config(config: Path) -> float | None:
 def _resolve_config(upstream: Path, alg: str, config: str | None) -> Path:
     config_root = (upstream / "config").resolve()
     if config:
-        raw = Path(config).expanduser()
-        # Keep custom algorithm configs inside the checked-out MarkLLM config
-        # directory. Resolve before checking containment so traversal and
-        # symlink escapes cannot reach arbitrary host files.
-        if raw.is_absolute():
-            candidate = raw
-        elif raw.parts and raw.parts[0] == "config":
-            candidate = upstream / raw
-        else:
-            candidate = config_root / raw
-        path = candidate.resolve()
-        try:
-            path.relative_to(config_root)
-        except ValueError as e:
+        # Treat the request value only as a key. Never construct a filesystem
+        # path from it: only JSON files already present in the checkout are
+        # eligible, and symlink escapes are excluded while building the map.
+        if "/" in config or "\\" in config:
             raise _Unavailable(
-                f"MarkLLM config must be inside {config_root}: {path}"
-            ) from e
+                "MarkLLM config must be a JSON file name from the checkout config directory"
+            )
+        config_files: dict[str, Path] = {}
+        for candidate in config_root.glob("*.json"):
+            path_candidate = candidate.resolve()
+            try:
+                path_candidate.relative_to(config_root)
+            except ValueError:
+                continue
+            config_files[candidate.name] = path_candidate
+        path = config_files.get(config)
+        if path is None:
+            raise _Unavailable(f"MarkLLM config not found in {config_root}: {config}")
     else:
         path = config_root / f"{alg}.json"
     if not path.is_file():
@@ -554,7 +555,7 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--config",
         default=None,
-        help="Algorithm config JSON (default: <checkout>/config/<ALG>.json)",
+        help="Config JSON file name in <checkout>/config (default: <ALG>.json)",
     )
     p.add_argument(
         "--temperature",
