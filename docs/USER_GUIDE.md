@@ -75,7 +75,7 @@ aiwr clean clip.mp4
 ```
 
 The built-in paths cover common PNG/JPEG/WebP/AVIF/HEIC/BMP/GIF/TIFF image
-metadata, SVG/PDF/OOXML/ODT/EPUB/HTML/Markdown containers, and MP4/MOV/M4A/
+metadata, SVG/PDF/OOXML/ODT/EPUB/HTML/Markdown/LaTeX containers, and MP4/MOV/M4A/
 M4V/WAV/MP3/FLAC metadata. PDF may use `qpdf`, Ghostscript, or ExifTool when
 already present on `PATH`; aiwr does not install or download them.
 

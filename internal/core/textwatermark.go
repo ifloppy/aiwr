@@ -98,7 +98,11 @@ func parseTextWatermarkOptions(raw json.RawMessage) (map[string]any, error) {
 		if !ok || strings.TrimSpace(text) == "" {
 			return fmt.Errorf("'%s' must be a non-empty string", key)
 		}
-		parsed[key] = strings.TrimSpace(text)
+		text = strings.TrimSpace(text)
+		if key == "config" && (text == "." || text == ".." || strings.ContainsAny(text, `/\\`)) {
+			return errors.New("'config' must be a simple filename")
+		}
+		parsed[key] = text
 		return nil
 	}
 	for _, key := range []string{"scheme", "model", "device", "config"} {

@@ -7,12 +7,12 @@ English version: [UPSTREAM.md](UPSTREAM.md)。
 | 字段 | 当前值 |
 | --- | --- |
 | 上游分支 | `main` |
-| 最近人工核对 | 2026-09-06 |
+| 最近人工核对 | 2026-09-11 |
 | 最近核对 release | `v0.7.0` |
 | 自动检查 | `.github/workflows/upstream-sync.yml`，每 30 分钟和手动触发 |
 | 本地检查 | `make upstream-check` |
 
-工作流把上游 `main` SHA 写入 `upstream_head:`，变化时创建或更新同步 PR。SHA 变化不代表行为已经移植；必须审查上游 diff、更新映射并重新运行 Go/Python 测试。
+工作流把上游 `main` SHA 写入 `upstream_head:`，变化时发布同步分支。由于仓库策略暂时禁止 Actions 创建 pull request，工作流会在运行摘要中提供手动创建 PR 的链接。SHA 变化不代表行为已经移植；必须审查上游 diff、更新映射并重新运行 Go/Python 测试。
 
 ## 目录映射
 
@@ -21,7 +21,7 @@ English version: [UPSTREAM.md](UPSTREAM.md)。
 | `service/scripts/text_unicode.py` | `internal/core/text.go` | Layer A 分类、检测、清理 |
 | `format_dispatch.py` | `internal/core/classify.go` | 扩展名和 magic bytes 路由 |
 | `image_meta.py` | `internal/core/image.go` | 图片元数据和 C2PA/JUMBF |
-| `container_meta.py` | `internal/core/container.go`、`pdf.go` | 文档、HTML、SVG、PDF、Markdown |
+| `container_meta.py` | `internal/core/container.go`、`pdf.go` | 文档、HTML、SVG、PDF、Markdown、LaTeX |
 | `av_meta.py` | `internal/core/av.go` | 音视频容器和 ID3/RIFF |
 | `common.py` | `internal/core/io.go`、`process.go` | 限额、原子写、目录镜像、reflink |
 | `inspect_file.py`、`clean_file.py` | `cmd/aiwr` | 统一 CLI |
@@ -63,4 +63,4 @@ adapter 目录和外部维护的环境。
 4. 同步 PR 记录已对齐、降级和待移植行为。
 5. release 前运行 `go test ./...`、`go vet ./...`、`make smoke` 和目录/reflink/HTTP smoke。
 
-`upstream_head: d9e9590d94e19b39eb2794266292324bfec8249a`
+`upstream_head: 81d808d5d71bb22a02b1bdc3df293a2d93422778`

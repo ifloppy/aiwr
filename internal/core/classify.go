@@ -19,6 +19,7 @@ var containerExts = map[string]bool{
 	".svg": true, ".pdf": true, ".docx": true, ".xlsx": true, ".pptx": true,
 	".odt": true, ".epub": true, ".html": true, ".htm": true,
 	".md": true, ".markdown": true, ".mdx": true,
+	".tex": true, ".ltx": true,
 }
 
 var textExts = map[string]bool{}
@@ -29,7 +30,7 @@ var avExts = map[string]bool{
 }
 
 func init() {
-	for _, ext := range strings.Fields(`.txt .text .css .js .jsx .mjs .cjs .ts .tsx .gd .gdshader .py .rs .go .json .yaml .yml .toml .csv .c .h .cpp .cc .hpp .cs .java .kt .kts .swift .scala .dart .rb .php .lua .pl .r .sh .bash .zsh .ps1 .sql .vue .svelte .astro .rst .adoc .asciidoc .org .tex .po .pot .strings .arb .resx .properties .ini .cfg .conf .tsv`) {
+	for _, ext := range strings.Fields(`.txt .text .css .js .jsx .mjs .cjs .ts .tsx .gd .gdshader .py .rs .go .json .yaml .yml .toml .csv .c .h .cpp .cc .hpp .cs .java .kt .kts .swift .scala .dart .rb .php .lua .pl .r .sh .bash .zsh .ps1 .sql .vue .svelte .astro .rst .adoc .asciidoc .org .po .pot .strings .arb .resx .properties .ini .cfg .conf .tsv`) {
 		textExts[ext] = true
 	}
 }
@@ -158,6 +159,8 @@ func detectContainerFormat(path string, data []byte) string {
 		return "html"
 	case ".md", ".markdown", ".mdx":
 		return "markdown"
+	case ".tex", ".ltx":
+		return "latex"
 	}
 	if bytes.HasPrefix(data, []byte("%PDF")) {
 		return "pdf"

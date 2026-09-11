@@ -3,7 +3,7 @@ name: remove-ai-marks
 description: >
   Remove multi-vendor AI provenance marks: invisible Unicode (Layer A), statistical
   text watermarks via rewrite (Layer B, always offer), and C2PA/EXIF/XMP/container
-  metadata on PNG/JPEG/WebP/SVG/PDF/DOCX/ODT/HTML/MD. Covers Claude, Gemini/SynthID-class,
+  metadata on PNG/JPEG/WebP/SVG/PDF/DOCX/ODT/HTML/MD/TEX. Covers Claude, Gemini/SynthID-class,
   OpenAI provenance, and open-LLM sampling marks. Use when the user asks to strip
   watermarks, remove C2PA/Content Credentials, clean AI metadata, remove invisible
   Unicode, anti-detect clean AI output, or runs /remove-ai-marks (aliases:
@@ -135,7 +135,7 @@ Intended for **your own** content (privacy, hygiene, research). Do not market re
 | --- | --- |
 | Pasted / clipboard text | temp file → `/inspect` then `/clean` (text) |
 | `.txt` / code | text Layer A (+ formatter for code) |
-| `.md` / `.html` | container clean (frontmatter/meta) + Layer A; Layer B to the prose via a `/clean` text pass or the agent rewrite model |
+| `.md` / `.html` / `.tex` / `.ltx` | container clean (frontmatter/meta or `\hypersetup`/`\pdfinfo` and provenance comments) + Layer A; Layer B to the prose via a `/clean` text pass or the agent rewrite model |
 | `.png` / `.jpg` / `.jpeg` / `.webp` / `.avif` / `.heic` / `.bmp` / `.gif` / `.tiff` | image metadata strip |
 | `.svg` / `.pdf` / `.docx` / `.epub` / `.odt` | container metadata strip |
 | Directory / website | aggregate audit via the service CLIs (see below) |
@@ -211,7 +211,7 @@ the default strategy (`config/clean_strategy.json`, e.g.
 reports `report.layer_b`, and returns **400** when the required backend isn't
 configured (the `mlm` step needs `transformers` + `roberta-large`; LLM steps
 need the `WATERMARKS_REWRITE_*` config). Markdown/HTML and other containers
-(`.md`, `.html`, `.pdf`, `.docx`, …) are cleaned as containers (metadata +
+(`.md`, `.html`, `.tex`, `.pdf`, `.docx`, …) are cleaned as containers (metadata +
 Layer A) and do **not** run the Layer B rewrite in `/clean`; apply Layer B to
 their prose by extracting the text and passing it to `/clean` as text, or by
 running the prompts below with a model **≠ suspected origin** (Claude text → not
@@ -326,6 +326,9 @@ Always state:
 - Layer A does **not** remove token-sampling watermarks.
 - Layer B cannot be gold-verified without vendor detectors / keys. Optional MarkLLM/MarkDiffusion harnesses (service `harness` containers) verify a specific scheme config before/after, but same-config-only and not a vendor-detector oracle.
 - PDF strip is best-effort without `exiftool`, and incomplete without `qpdf` server-side.
+- `.tex`/`.ltx` cleaning is source-level: it removes provenance fields from
+  `\hypersetup`/`\pdfinfo` and provenance/tooling comments, while preserving
+  verbatim examples. Clean the compiled PDF separately when needed.
 - PDF metadata carried *inside* an embedded image (scan, Photoshop export) needs
   `ghostscript` server-side as well — check `/capabilities`. The default
   `deep_images: "auto"` chases it only when a marker survived the document-level

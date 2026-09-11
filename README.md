@@ -14,7 +14,8 @@ the MIT License; see [LICENSE](LICENSE).
 - Layer A text cleanup: zero-width and space-like characters, bidi controls,
   selected homoglyphs, NFKC normalization, and emoji glue options.
 - File metadata cleanup for PNG, JPEG, WebP, AVIF/HEIC, BMP, GIF, TIFF,
-  SVG, PDF, DOCX/XLSX/PPTX, ODT, EPUB, HTML, Markdown, MP4/MOV/M4A/M4V,
+  SVG, PDF, DOCX/XLSX/PPTX, ODT, EPUB, HTML, Markdown, LaTeX (.tex/.ltx),
+  MP4/MOV/M4A/M4V,
   WAV, MP3, and FLAC.
 - Inspection, detection, directory mirroring, JSON, SARIF, stdin, staged-file
   checks, PostToolUse hooks, an HTTP API, website auditing, and the stealer
@@ -50,7 +51,7 @@ reported as unavailable; it is never downloaded automatically.
 
 ## Install and verify
 
-Go 1.23 or newer is required for a source build. The core module only needs
+Go 1.25 or newer is required for a source build. The core module only needs
 the Unicode support dependency declared in `go.mod`.
 
 ```bash

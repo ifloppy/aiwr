@@ -218,7 +218,7 @@ func (s *apiServer) capabilities(w http.ResponseWriter, r *http.Request) {
 		"kinds": map[string]any{
 			"text":      []string{"Layer A Unicode inspection/cleaning", "NFKC normalization", "homoglyph normalization"},
 			"image":     []string{"PNG", "JPEG", "WebP", "AVIF", "HEIC", "BMP", "GIF", "TIFF"},
-			"container": []string{"SVG", "PDF", "DOCX", "XLSX", "PPTX", "ODT", "EPUB", "HTML", "Markdown"},
+			"container": []string{"SVG", "PDF", "DOCX", "XLSX", "PPTX", "ODT", "EPUB", "HTML", "Markdown", "LaTeX"},
 			"av":        []string{"MP4", "MOV", "M4A", "M4V", "WAV", "MP3", "FLAC"},
 		},
 		"options": []string{"nfkc", "aggressive_homoglyphs", "normalize_spaces", "strip_emoji_glue", "strip_bidi", "keep_non_ai_metadata", "strip_all_metadata", "also_layer_a_text", "layer_a_only", "remove_pixel", "remove_audio_watermark", "deep_images", "detect_before", "detect_after", "style", "strategy", "backend", "model", "base_url", "reasoning_effort", "allow_remote", "as", "force_text", "stylometry", "threshold", "upstream_scripts", "synthid_dir", "markllm_scheme", "markllm_dir", "markllm_model", "markllm_timeout", "ctrlregen_dir", "ctrlregen_intensity", "ctrlregen_steps", "ctrlregen_device", "ctrlregen_seed", "ctrlregen_timeout", "markdiffusion_dir", "markdiffusion_intensity", "markdiffusion_model", "markdiffusion_size", "markdiffusion_steps", "markdiffusion_device", "markdiffusion_timeout", "vote_threshold", "frame_fraction", "audio_tempo", "audio_pitch", "audio_bitrate", "audio_codec", "ffmpeg_timeout"},
