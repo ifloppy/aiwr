@@ -52,7 +52,7 @@ aiwr clean book.epub
 aiwr clean clip.mp4
 ```
 
-内置管线覆盖常见图片元数据、SVG/PDF/OOXML/ODT/EPUB/HTML/Markdown 容器和 MP4/MOV/M4A/M4V/WAV/MP3/FLAC 元数据。若 PATH 中已有 `qpdf`、Ghostscript 或 ExifTool，PDF 可能使用它们；aiwr 不会安装或下载这些工具。
+内置管线覆盖常见图片元数据、SVG/PDF/OOXML/ODT/EPUB/HTML/Markdown/LaTeX 容器和 MP4/MOV/M4A/M4V/WAV/MP3/FLAC 元数据。若 PATH 中已有 `qpdf`、Ghostscript 或 ExifTool，PDF 可能使用它们；aiwr 不会安装或下载这些工具。
 
 `--keep-non-ai-metadata` 尽量保留普通元数据。清理可能损失作者、日期、版权或色彩信息；核心不保证无损移除像素、波形、私有或密钥型水印。音频重混需要 `ffmpeg` 且有损：
 

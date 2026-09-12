@@ -7,15 +7,17 @@ Behavioral baseline: [guillaumemeyer/watermarks-remover](https://github.com/guil
 | Field | Current value |
 | --- | --- |
 | Upstream branch | `main` |
-| Last manual review | 2026-09-06 |
+| Last manual review | 2026-09-11 |
 | Last reviewed release | `v0.7.0` |
 | Automated check | `.github/workflows/upstream-sync.yml`, every 30 minutes and on demand |
 | Local check | `make upstream-check` |
 
 The workflow records the upstream `main` SHA in the `upstream_head:` line and
-creates or updates a synchronization PR when it changes. A changed SHA does
-not mean that behavior has been ported: review the upstream diff, update the
-mapping, and rerun the Go and Python tests.
+publishes a synchronization branch when it changes. Because repository policy
+currently blocks Actions from creating pull requests, the workflow writes a
+manual PR handoff to its run summary. A changed SHA does not mean that behavior
+has been ported: review the upstream diff, update the mapping, and rerun the Go
+and Python tests.
 
 ## Directory mapping
 
@@ -24,7 +26,7 @@ mapping, and rerun the Go and Python tests.
 | `service/scripts/text_unicode.py` | `internal/core/text.go` | Layer A classification, detection, and cleaning |
 | `format_dispatch.py` | `internal/core/classify.go` | Extension and magic-byte routing |
 | `image_meta.py` | `internal/core/image.go` | Image metadata and C2PA/JUMBF |
-| `container_meta.py` | `internal/core/container.go`, `internal/core/pdf.go` | Documents, HTML, SVG, PDF, Markdown; optional tools |
+| `container_meta.py` | `internal/core/container.go`, `internal/core/pdf.go` | Documents, HTML, SVG, PDF, Markdown, LaTeX; optional tools |
 | `av_meta.py` | `internal/core/av.go` | Audio/video containers and ID3/RIFF |
 | `common.py` | `internal/core/io.go`, `process.go` | Limits, atomic writes, directory mirrors, reflink |
 | `inspect_file.py`, `clean_file.py` | `cmd/aiwr`, `internal/core/process.go` | Unified CLI |
@@ -85,4 +87,4 @@ and externally managed environment.
    directory/reflink/HTTP smoke checks. Do not publish third-party backend
    images as aiwr artifacts.
 
-upstream_head: d9e9590d94e19b39eb2794266292324bfec8249a
+upstream_head: 81d808d5d71bb22a02b1bdc3df293a2d93422778

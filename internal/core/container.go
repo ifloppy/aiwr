@@ -13,14 +13,16 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 )
 
 var aiMetaNameRE = regexp.MustCompile(`(?i)generator|ai[-_ ]?generated|claude|anthropic|openai|gemini|synthid|c2pa|content.?credential|provenance|digital.?source|aigc`)
-var htmlCleanMetaRE = regexp.MustCompile(`(?i)generator|claude|anthropic|openai|gemini|synthid|c2pa|aigc`)
 var generatorAIRE = regexp.MustCompile(`(?i)\bai\b|claude|anthropic|openai|chatgpt|gemini|synthid|copilot|midjourney|dall.?e|stable.?diffusion`)
+var aiFreeTextMarkerRE = regexp.MustCompile(`(?i)\bc2pa\b|\bcontent[-_ ]?credentials?\b|\bcontentauth\b|\bcai:|\bsynthid\b|\baigc\b|\bdigital[-_ ]?source[-_ ]?type\b|\b(trained[-_ ]?)?algorithmic[-_ ]?media\b`)
 var metaTagRE = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
 var metaAttrRE = regexp.MustCompile(`(?i)(name|property|content|generator)\s*=\s*["']([^"']*)["']`)
+var metaContentValueRE = regexp.MustCompile(`(?i)\bcontent\s*=\s*(?:"[^"]*"|'[^']*')`)
 var jsonLDRE = regexp.MustCompile(`(?is)<script\b[^>]*type\s*=\s*["']application/ld\+json["'][^>]*>.*?</script\s*>`)
 var dataAIAttrRE = regexp.MustCompile(`(?i)\sdata-ai[\w-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)`)
 var dataAIInspectAttrRE = regexp.MustCompile(`(?i)\bdata-ai[\w-]*\s*=\s*["'][^"']*["']`)
@@ -45,6 +47,26 @@ var markdownFrontmatterRE = regexp.MustCompile(`(?s)\A(---\r?\n)(.*?)(\r?\n---\r
 var markdownTopLevelKeyRE = regexp.MustCompile(`^([A-Za-z0-9_.-]+)\s*:`)
 var xmlTextSegmentTagRE = regexp.MustCompile(`(?s)<[^>]+>`)
 
+var generatorNameKeys = map[string]bool{
+	"generator": true, "generated_by": true, "generatedby": true,
+	"created_with": true, "createdwith": true, "made_with": true,
+	"madewith": true, "creator": true, "producer": true,
+	"software": true, "tool": true, "engine": true,
+}
+
+// namedValueIsAI applies the upstream container rule shared by Markdown and
+// HTML: values under ordinary prose keys are only evidence when they contain
+// unambiguous provenance markers. Vendor names such as "Claude Monet" and
+// phrases such as "a static site generator" remain ordinary prose unless the
+// key identifies the producing tool.
+func namedValueIsAI(name, value string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if generatorNameKeys[name] {
+		return aiMetaNameRE.MatchString(value)
+	}
+	return aiFreeTextMarkerRE.MatchString(value)
+}
+
 func inspectContainer(data []byte, path, format string, options ...Options) FileReport {
 	report, _ := inspectContainerWithError(data, path, format, options...)
 	return report
@@ -57,8 +79,16 @@ func inspectContainerWithError(data []byte, path, format string, options ...Opti
 	}
 	report := FileReport{Kind: KindContainer, Path: path, Format: format}
 	switch format {
-	case "markdown":
-		report.HasC2PA, report.HasAIMetadata, report.Findings, report.Details = inspectMarkdown(data)
+	case "markdown", "latex":
+		var hasC2PA, hasAIMetadata bool
+		var findings []string
+		var details map[string]any
+		if format == "latex" {
+			hasC2PA, hasAIMetadata, findings, details = inspectLaTeX(data)
+		} else {
+			hasC2PA, hasAIMetadata, findings, details = inspectMarkdown(data)
+		}
+		report.HasC2PA, report.HasAIMetadata, report.Findings, report.Details = hasC2PA, hasAIMetadata, findings, details
 		textReport := inspectText(data, opts.AggressiveHomoglyphs, opts.StripEmojiGlue)
 		if opts.Stylometry {
 			textReport.Stylometry = scoreStylometry(string(data), path, opts.Threshold)
@@ -120,6 +150,8 @@ func inspectContainerWithError(data []byte, path, format string, options ...Opti
 		report.Notes = append(report.Notes, strings.ToUpper(format)+": metadata/provenance and embedded media are scanned")
 	case "epub":
 		report.Notes = append(report.Notes, "EPUB: package-document metadata, XHTML meta/JSON-LD, and embedded media are scanned")
+	case "latex":
+		report.Notes = append(report.Notes, "LaTeX: PDF metadata commands and provenance/tooling comments are scanned")
 	}
 	if report.SuspiciousTotal > 0 {
 		report.Notes = append(report.Notes, fmt.Sprintf("layer A: %d invisible/format codepoint(s) in body text; clean removes these", report.SuspiciousTotal))
@@ -523,6 +555,12 @@ func cleanContainer(data []byte, format string, opts Options) ([]byte, []string,
 			return data, actions, err
 		}
 		return cleanContainerTextLayer(cleaned, actions, opts)
+	case "latex":
+		cleaned, actions, err := cleanLaTeX(data, opts)
+		if err != nil {
+			return data, actions, err
+		}
+		return cleanContainerTextLayer(cleaned, actions, opts)
 	case "html":
 		cleaned, actions, err := cleanHTML(data, opts)
 		if err != nil {
@@ -584,7 +622,7 @@ func inspectMarkdown(data []byte) (bool, bool, []string, map[string]any) {
 				hasAI = true
 				findings = append(findings, "frontmatter key: "+key)
 			}
-			if aiMetaNameRE.MatchString(value) {
+			if namedValueIsAI(key, value) {
 				hasAI = true
 				findings = append(findings, "frontmatter value hit on "+key)
 			}
@@ -641,7 +679,7 @@ func cleanMarkdown(data []byte, opts Options) ([]byte, []string, error) {
 				dropping = true
 				continue
 			}
-			if aiMetaNameRE.MatchString(value) {
+			if namedValueIsAI(key, value) {
 				actions = append(actions, "drop frontmatter key (value hit): "+key)
 				dropping = true
 				continue
@@ -662,6 +700,454 @@ func cleanMarkdown(data []byte, opts Options) ([]byte, []string, error) {
 	actions = append(actions, uriActions...)
 	if len(actions) == 0 {
 		actions = append(actions, "no AI frontmatter keys or embedded data URIs removed")
+	}
+	return []byte(text), actions, nil
+}
+
+// LaTeX sources can carry compile-time PDF metadata even though the source
+// itself is plain text. Keep this parser lexical and bounded: it only touches
+// live \hypersetup/\pdfinfo blocks and known provenance comments, while
+// preserving examples inside comments and verbatim/listing environments.
+var latexMetaOpenRE = regexp.MustCompile(`(?i)\\(hypersetup|pdfinfo)\b\s*\{`)
+var latexEnvBeginRE = regexp.MustCompile(`(?i)\\begin\{(verbatim\*?|lstlisting\*?|minted|Verbatim)\}`)
+var latexEnvEndRE = regexp.MustCompile(`(?i)\\end\{(verbatim\*?|lstlisting\*?|minted|Verbatim)\}`)
+var latexInlineVerbRE = regexp.MustCompile(`(?i)\\(verb\*?|lstinline\*?)(?:\[[^\r\n\]]*\])?([^\s\\{}\[\]])`)
+var latexMagicCommentRE = regexp.MustCompile(`(?i)%\s*!\s*(?:tex|bib|latex)\b`)
+var latexClearKeyRE = regexp.MustCompile(`(?i)^(?:pdf)?(?:author|subject|creator|producer|keywords|creationdate|moddate)$`)
+var latexC2PARE = regexp.MustCompile(`(?i)c2pa|content.?credential|contentcredential`)
+
+type latexRange struct{ start, end int }
+
+type latexMetaBlock struct {
+	command    string
+	argument   string
+	start, end int
+}
+
+type latexEntry struct {
+	key, value, raw string
+}
+
+func latexEscapedAt(text string, index int) bool {
+	backslashes := 0
+	for i := index - 1; i >= 0 && text[i] == '\\'; i-- {
+		backslashes++
+	}
+	return backslashes%2 == 1
+}
+
+func mergeLatexRanges(ranges []latexRange) []latexRange {
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start < ranges[j].start })
+	merged := make([]latexRange, 0, len(ranges))
+	for _, current := range ranges {
+		if current.end <= current.start {
+			continue
+		}
+		if len(merged) > 0 && current.start <= merged[len(merged)-1].end {
+			if current.end > merged[len(merged)-1].end {
+				merged[len(merged)-1].end = current.end
+			}
+			continue
+		}
+		merged = append(merged, current)
+	}
+	return merged
+}
+
+func latexLiteralRanges(text string) []latexRange {
+	ranges := make([]latexRange, 0)
+	for _, match := range latexEnvBeginRE.FindAllStringIndex(text, -1) {
+		endMatch := latexEnvEndRE.FindStringIndex(text[match[1]:])
+		if endMatch == nil {
+			continue
+		}
+		ranges = append(ranges, latexRange{match[0], match[1] + endMatch[1]})
+	}
+	for _, match := range latexInlineVerbRE.FindAllStringSubmatchIndex(text, -1) {
+		if len(match) < 6 {
+			continue
+		}
+		delimStart, delimEnd := match[4], match[5]
+		if delimStart < 0 || delimEnd <= delimStart {
+			continue
+		}
+		delim := text[delimStart:delimEnd]
+		close := strings.Index(text[delimEnd:], delim)
+		if close < 0 {
+			ranges = append(ranges, latexRange{match[0], len(text)})
+		} else {
+			ranges = append(ranges, latexRange{match[0], delimEnd + close + len(delim)})
+		}
+	}
+	return mergeLatexRanges(ranges)
+}
+
+func latexIgnoredRanges(text string) []latexRange {
+	ranges := latexLiteralRanges(text)
+	for i := 0; i < len(text); i++ {
+		if text[i] != '%' || latexEscapedAt(text, i) {
+			continue
+		}
+		end := strings.IndexByte(text[i:], '\n')
+		if end < 0 {
+			end = len(text)
+		} else {
+			end += i
+		}
+		ranges = append(ranges, latexRange{i, end})
+		i = end
+	}
+	return mergeLatexRanges(ranges)
+}
+
+func latexInIgnoredRange(ranges []latexRange, pos int) bool {
+	for _, current := range ranges {
+		if current.start > pos {
+			return false
+		}
+		if pos < current.end {
+			return true
+		}
+	}
+	return false
+}
+
+func latexMatchingBrace(text string, open int) int {
+	depth := 0
+	for i := open; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '%':
+			if !latexEscapedAt(text, i) {
+				if end := strings.IndexByte(text[i:], '\n'); end >= 0 {
+					i += end
+				} else {
+					return -1
+				}
+			}
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func latexMetaBlocks(text string) []latexMetaBlock {
+	ignored := latexIgnoredRanges(text)
+	blocks := make([]latexMetaBlock, 0)
+	lastEnd := 0
+	for _, match := range latexMetaOpenRE.FindAllStringSubmatchIndex(text, -1) {
+		if len(match) < 4 || match[0] < lastEnd || latexInIgnoredRange(ignored, match[0]) {
+			continue
+		}
+		braceOffset := strings.LastIndexByte(text[match[0]:match[1]], '{')
+		if braceOffset < 0 {
+			continue
+		}
+		open := match[0] + braceOffset
+		close := latexMatchingBrace(text, open)
+		if close < 0 {
+			continue
+		}
+		blocks = append(blocks, latexMetaBlock{
+			command:  strings.ToLower(text[match[2]:match[3]]),
+			argument: text[open+1 : close],
+			start:    match[0],
+			end:      close + 1,
+		})
+		lastEnd = close + 1
+	}
+	return blocks
+}
+
+func splitLatexItems(text string) []string {
+	items := make([]string, 0)
+	start, depth := 0, 0
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '%':
+			if !latexEscapedAt(text, i) {
+				if end := strings.IndexByte(text[i:], '\n'); end >= 0 {
+					i += end
+				} else {
+					i = len(text)
+				}
+			}
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				items = append(items, text[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(items, text[start:])
+}
+
+func splitLatexKeyValue(item string) (string, string, bool) {
+	depth := 0
+	for i := 0; i < len(item); i++ {
+		switch item[i] {
+		case '\\':
+			i++
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case '=':
+			if depth == 0 {
+				return strings.TrimSpace(item[:i]), strings.TrimSpace(item[i+1:]), true
+			}
+		}
+	}
+	return strings.TrimSpace(item), "", false
+}
+
+func latexPDFInfoEntries(argument string) []latexEntry {
+	entries := make([]latexEntry, 0)
+	for i := 0; i < len(argument); {
+		for i < len(argument) && (argument[i] == ' ' || argument[i] == '\t' || argument[i] == '\r' || argument[i] == '\n') {
+			i++
+		}
+		if i >= len(argument) {
+			break
+		}
+		if argument[i] == '%' && !latexEscapedAt(argument, i) {
+			if end := strings.IndexByte(argument[i:], '\n'); end >= 0 {
+				i += end + 1
+			} else {
+				break
+			}
+			continue
+		}
+		if argument[i] != '/' {
+			i++
+			continue
+		}
+		start := i
+		i++
+		for i < len(argument) && !strings.ContainsRune(" \t\r\n", rune(argument[i])) {
+			i++
+		}
+		key := argument[start:i]
+		for i < len(argument) && strings.ContainsRune(" \t\r\n", rune(argument[i])) {
+			i++
+		}
+		valueStart := i
+		if i < len(argument) && argument[i] == '(' {
+			depth := 0
+			for i < len(argument) {
+				if argument[i] == '\\' {
+					i += 2
+					continue
+				}
+				if argument[i] == '(' {
+					depth++
+				} else if argument[i] == ')' {
+					depth--
+					if depth == 0 {
+						i++
+						break
+					}
+				}
+				i++
+			}
+		} else if i < len(argument) && argument[i] == '<' {
+			if end := strings.IndexByte(argument[i+1:], '>'); end >= 0 {
+				i += end + 2
+			} else {
+				i = len(argument)
+			}
+		} else {
+			for i < len(argument) && !strings.ContainsRune(" \t\r\n", rune(argument[i])) {
+				i++
+			}
+		}
+		entries = append(entries, latexEntry{key: key, value: argument[valueStart:i], raw: argument[start:i]})
+	}
+	return entries
+}
+
+func latexEntryClass(entry latexEntry) (ai, c2pa, clear bool) {
+	key := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(entry.key), "/"))
+	ai = aiMetaNameRE.MatchString(entry.key) || aiMetaNameRE.MatchString(entry.value)
+	c2pa = latexC2PARE.MatchString(entry.key) || latexC2PARE.MatchString(entry.value)
+	clear = latexClearKeyRE.MatchString(key)
+	return ai, c2pa, clear
+}
+
+func latexCommentClass(line string) (drop bool, label string, ai bool) {
+	if aiMetaNameRE.MatchString(line) {
+		return true, "AI markers", true
+	}
+	if latexMagicCommentRE.MatchString(line) {
+		return true, "magic comment", false
+	}
+	lower := strings.ToLower(line)
+	if strings.Contains(line, "-*-") || strings.Contains(lower, "vim:") {
+		return true, "editor modeline", false
+	}
+	return false, "", false
+}
+
+func inspectLaTeX(data []byte) (bool, bool, []string, map[string]any) {
+	text := string(data)
+	findings := make([]string, 0)
+	hasAI, hasC2PA := false, false
+	commands, keysDropped, commentsDropped := 0, 0, 0
+	for _, block := range latexMetaBlocks(text) {
+		commands++
+		var entries []latexEntry
+		if block.command == "pdfinfo" {
+			entries = latexPDFInfoEntries(block.argument)
+		} else {
+			for _, raw := range splitLatexItems(block.argument) {
+				item := strings.TrimSpace(raw)
+				if item == "" {
+					continue
+				}
+				key, value, _ := splitLatexKeyValue(item)
+				entries = append(entries, latexEntry{key: key, value: value, raw: item})
+			}
+		}
+		for _, entry := range entries {
+			ai, c2pa, clear := latexEntryClass(entry)
+			if !ai && !c2pa && !clear {
+				continue
+			}
+			keysDropped++
+			if ai || c2pa {
+				findings = append(findings, "latex ai: "+block.command+" "+entry.key)
+				hasAI = true
+				if c2pa {
+					hasC2PA = true
+				}
+			} else {
+				findings = append(findings, "info: latex "+block.command+" "+entry.key)
+			}
+		}
+	}
+	literal := latexLiteralRanges(text)
+	for offset := 0; offset < len(text); {
+		end := strings.IndexByte(text[offset:], '\n')
+		lineEnd := len(text)
+		if end >= 0 {
+			lineEnd = offset + end
+		}
+		line := text[offset:lineEnd]
+		trimmed := strings.TrimLeft(line, " \t\r")
+		if !latexInIgnoredRange(literal, offset) && strings.HasPrefix(trimmed, "%") {
+			if drop, label, ai := latexCommentClass(trimmed); drop {
+				commentsDropped++
+				prefix := "info: latex "
+				if ai {
+					prefix = "latex ai: "
+					hasAI = true
+				}
+				findings = append(findings, prefix+"comment ("+label+")")
+			}
+		}
+		if end < 0 {
+			break
+		}
+		offset = lineEnd + 1
+	}
+	return hasC2PA, hasAI || hasC2PA, findings, map[string]any{
+		"commands": commands, "keys_dropped": keysDropped, "comments_dropped": commentsDropped,
+	}
+}
+
+func cleanLaTeX(data []byte, _ Options) ([]byte, []string, error) {
+	text := string(data)
+	actions := make([]string, 0)
+	var out strings.Builder
+	last := 0
+	for _, block := range latexMetaBlocks(text) {
+		out.WriteString(text[last:block.start])
+		kept := make([]string, 0)
+		removed := make([]string, 0)
+		var entries []latexEntry
+		if block.command == "pdfinfo" {
+			entries = latexPDFInfoEntries(block.argument)
+		} else {
+			for _, raw := range splitLatexItems(block.argument) {
+				item := strings.TrimSpace(raw)
+				if item == "" {
+					continue
+				}
+				key, value, _ := splitLatexKeyValue(item)
+				entries = append(entries, latexEntry{key: key, value: value, raw: item})
+			}
+		}
+		for _, entry := range entries {
+			ai, c2pa, clear := latexEntryClass(entry)
+			if ai || c2pa || clear {
+				removed = append(removed, strings.ToLower(strings.TrimPrefix(entry.key, "/")))
+			} else {
+				kept = append(kept, entry.raw)
+			}
+		}
+		if len(removed) == 0 {
+			out.WriteString(text[block.start:block.end])
+		} else if len(kept) == 0 {
+			actions = append(actions, "drop "+block.command+" block")
+		} else {
+			out.WriteString("\\" + block.command + "{" + strings.Join(kept, ", ") + "}")
+			for _, key := range removed {
+				actions = append(actions, "drop "+block.command+" "+key)
+			}
+		}
+		last = block.end
+	}
+	out.WriteString(text[last:])
+	text = out.String()
+
+	literal := latexLiteralRanges(text)
+	var lines strings.Builder
+	for offset := 0; offset < len(text); {
+		end := strings.IndexByte(text[offset:], '\n')
+		lineEnd := len(text)
+		if end >= 0 {
+			lineEnd = offset + end
+		}
+		line := text[offset:lineEnd]
+		trimmed := strings.TrimLeft(line, " \t\r")
+		if latexInIgnoredRange(literal, offset) || !strings.HasPrefix(trimmed, "%") {
+			lines.WriteString(line)
+			if end >= 0 {
+				lines.WriteByte('\n')
+			}
+		} else if drop, label, _ := latexCommentClass(trimmed); drop {
+			actions = append(actions, "drop comment: "+label)
+		} else {
+			lines.WriteString(line)
+			if end >= 0 {
+				lines.WriteByte('\n')
+			}
+		}
+		if end < 0 {
+			break
+		}
+		offset = lineEnd + 1
+	}
+	text = lines.String()
+	if len(actions) == 0 {
+		actions = append(actions, "no LaTeX metadata removed")
 	}
 	return []byte(text), actions, nil
 }
@@ -1406,16 +1892,40 @@ func inspectHTML(data []byte) (bool, bool, []string, map[string]any) {
 }
 
 func htmlMetaAI(tag string) bool {
-	if aiMetaNameRE.MatchString(tag) {
+	attrs := map[string]string{}
+	for _, match := range metaAttrRE.FindAllStringSubmatch(tag, -1) {
+		if len(match) == 3 {
+			attrs[strings.ToLower(match[1])] = match[2]
+		}
+	}
+	name := attrs["name"]
+	if name == "" {
+		name = attrs["property"]
+	}
+	if name == "" {
+		name = attrs["generator"]
+	}
+	content := attrs["content"]
+	// Only the content attribute uses the free-prose rule. Other attributes
+	// retain the whole-tag scan so a marker in property/itemprop/etc. is not
+	// hidden by the content split.
+	skeleton := metaContentValueRE.ReplaceAllStringFunc(tag, func(value string) string {
+		quote := strings.IndexAny(value, "\"'")
+		if quote < 0 {
+			return value
+		}
+		return value[:quote+1] + value[quote:quote+1]
+	})
+	if aiMetaNameRE.MatchString(skeleton) {
 		return true
 	}
-	lower := strings.ToLower(tag)
-	for _, hint := range aiMetaHints {
+	lower := strings.ToLower(skeleton)
+	for _, hint := range aiMetaHints[:12] {
 		if bytes.Contains([]byte(lower), bytes.ToLower(hint)) {
 			return true
 		}
 	}
-	return false
+	return namedValueIsAI(name, content)
 }
 
 func cleanHTML(data []byte, opts Options) ([]byte, []string, error) {
@@ -1427,7 +1937,7 @@ func cleanHTML(data []byte, opts Options) ([]byte, []string, error) {
 		for _, block := range blocks {
 			tag := text[block.openStart:block.openEnd]
 			out.WriteString(text[last:block.openStart])
-			if isCMSGenerator(tag) || !htmlCleanMetaRE.MatchString(tag) {
+			if isCMSGenerator(tag) || !htmlMetaAI(tag) {
 				out.WriteString(tag)
 			} else {
 				actions = append(actions, "drop meta: "+short(tag))

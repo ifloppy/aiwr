@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   watch:
@@ -37,19 +36,37 @@ jobs:
           fi
           ./scripts/update-upstream-ref.sh "$sha"
           echo "changed=true" >> "$GITHUB_OUTPUT"
-      - name: Open sync PR
+      # The repository policy currently allows GITHUB_TOKEN to push branches but
+      # does not allow Actions to create pull requests. Publish the handoff
+      # branch directly so the scheduled watcher remains green and a maintainer
+      # can open the review PR from the summary link.
+      - name: Publish sync branch
         if: steps.update.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v8
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: track upstream ${{ steps.upstream.outputs.sha }}"
-          branch: automation/upstream-sync
-          delete-branch: true
-          title: "chore: sync upstream watermarks-remover"
-          body: |
-            Upstream `main` moved to `${{ steps.upstream.outputs.sha }}`.
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add UPSTREAM.md UPSTREAM.zh-CN.md
+          git commit -m "chore: track upstream ${{ steps.upstream.outputs.sha }}"
 
-            Review the upstream diff, port behavior according to `UPSTREAM.md`,
-            update `ROADMAP.md`, and run the complete Go test/smoke suite before
-            merging. This PR intentionally updates the tracking pointer only.
-          labels: upstream-sync
+          remote_ref="refs/remotes/origin/automation/upstream-sync"
+          if git fetch origin "refs/heads/automation/upstream-sync:${remote_ref}"; then
+            expected="$(git rev-parse "${remote_ref}")"
+          else
+            expected="0000000000000000000000000000000000000000"
+          fi
+          git push --force-with-lease="refs/heads/automation/upstream-sync:${expected}" \
+            origin HEAD:refs/heads/automation/upstream-sync
+
+      - name: Report manual sync PR handoff
+        if: steps.update.outputs.changed == 'true'
+        shell: bash
+        run: |
+          {
+            echo "### Upstream sync branch published"
+            echo
+            echo "Actions PR creation is disabled by the repository policy."
+            echo "Open the review PR manually from the automation/upstream-sync branch:"
+            echo "https://github.com/${GITHUB_REPOSITORY}/compare/automation/upstream-sync?expand=1"
+          } >> "$GITHUB_STEP_SUMMARY"

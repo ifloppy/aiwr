@@ -7,7 +7,7 @@ English documentation: [README.md](README.md) · [English user guide](docs/USER_
 ## 功能范围
 
 - Layer A 文本清理：零宽字符、异体空格、双向控制符、选定同形字、NFKC 规范化和 emoji glue 选项。
-- PNG、JPEG、WebP、AVIF/HEIC、BMP、GIF、TIFF、SVG、PDF、DOCX/XLSX/PPTX、ODT、EPUB、HTML、Markdown、MP4/MOV/M4A/M4V、WAV、MP3、FLAC 的元数据清理。
+- PNG、JPEG、WebP、AVIF/HEIC、BMP、GIF、TIFF、SVG、PDF、DOCX/XLSX/PPTX、ODT、EPUB、HTML、Markdown、LaTeX（.tex/.ltx）、MP4/MOV/M4A/M4V、WAV、MP3、FLAC 的元数据清理。
 - 检查、检测、目录镜像、JSON、SARIF、stdin、暂存区检查、PostToolUse hook、HTTP API、网站审计和 stealer 研究流水线。
 - 可选 Layer B 重写：本地 Ollama 或明确授权的 OpenAI-compatible endpoint。默认构建不会下载或嵌入重型模型/GPU 依赖。
 
@@ -25,7 +25,7 @@ Go binary 和常规安装包包含确定性清理器、Unicode/元数据检查�
 
 ## 安装和验证
 
-源码构建需要 Go 1.23 或更新版本：
+源码构建需要 Go 1.25 或更新版本：
 
 ```bash
 go build -trimpath -o aiwr ./cmd/aiwr

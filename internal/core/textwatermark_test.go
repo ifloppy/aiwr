@@ -55,6 +55,22 @@ func TestTextWatermarkHTTPUnconfiguredAndValidation(t *testing.T) {
 	}
 }
 
+func TestTextWatermarkConfigRejectsPathTraversal(t *testing.T) {
+	for _, config := range []string{"../config.json", `..\config.json`, "/tmp/config.json", ".", ".."} {
+		raw, err := json.Marshal(map[string]any{"config": config})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := parseTextWatermarkOptions(raw); err == nil {
+			t.Fatalf("path-like watermark config was accepted: %q", config)
+		}
+	}
+	valid, err := parseTextWatermarkOptions(json.RawMessage(`{"config":"config.json"}`))
+	if err != nil || valid["config"] != "config.json" {
+		t.Fatalf("simple watermark config was rejected: %#v, %v", valid, err)
+	}
+}
+
 func TestTextWatermarkHTTPSidecarAndBatch(t *testing.T) {
 	t.Setenv("MARKLLM_DIR", "")
 	t.Setenv("WATERMARKS_SYNTHID_TEXT_API_KEY", "sidecar-secret")
