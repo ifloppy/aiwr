@@ -25,6 +25,7 @@ Usage:
   aiwr inspect [options] FILE...
   aiwr detect [options] FILE...
   aiwr audit [options] DIRECTORY|FILE...
+  aiwr doctor [--json] [--strict]
   aiwr rewrite-text [options] [FILE]
   aiwr stealer query|build|detect [options]
   aiwr download-prompts [options]
@@ -59,6 +60,7 @@ const usageChinese = `aiwr - 检查并移除 AI 水印/来源元数据
   aiwr inspect [选项] 文件...
   aiwr detect [选项] 文件...
   aiwr audit [选项] 目录|文件...
+  aiwr doctor [--json] [--strict]
   aiwr rewrite-text [选项] [文件]
   aiwr stealer query|build|detect [选项]
   aiwr download-prompts [选项]
@@ -149,6 +151,8 @@ func run(args []string) int {
 		return runExternalCommand(args[1:], "clean_ctrlregen.py")
 	case "audit-website", "audit_website":
 		return runAuditWebsite(args[1:])
+	case "doctor":
+		return runDoctor(args[1:])
 	case "check-staged", "check_staged":
 		return runCheckStaged(args[1:])
 	case "clean-staged", "clean_staged":

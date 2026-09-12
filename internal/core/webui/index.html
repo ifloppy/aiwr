@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="aiwr 本机内容检查与清理">
+  <title>aiwr · 检查与清理</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workbench">跳到工作区</a>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">a<span>i</span>wr</div>
+      <span class="brand-name">检查与清理</span>
+    </div>
+    <div class="header-actions">
+      <span id="connectionBadge" class="status-badge muted">● 本机服务</span>
+      <a class="text-link" href="/openapi.json" target="_blank" rel="noreferrer">API ↗</a>
+    </div>
+  </header>
+
+  <main class="page">
+    <nav class="flow" aria-label="操作流程">
+      <div class="flow-step active" data-step="1"><span>1</span><b>选择</b></div>
+      <i aria-hidden="true">→</i>
+      <div class="flow-step" data-step="2"><span>2</span><b>检查</b></div>
+      <i aria-hidden="true">→</i>
+      <div class="flow-step" data-step="3"><span>3</span><b>清理 / 下载</b></div>
+    </nav>
+    <p id="connectionStatus" class="connection-status" role="status">正在连接本机服务…</p>
+
+    <div id="workbench" class="workspace-grid">
+      <section class="card workbench-card" aria-labelledby="input-heading">
+        <div class="card-heading">
+          <div class="heading-icon orange" aria-hidden="true">＋</div>
+          <div><h1 id="input-heading">选择内容</h1><p>文本或文件</p></div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="输入类型">
+          <button class="tab active" type="button" role="tab" aria-selected="true" data-mode="text"><span aria-hidden="true">✎</span> 文本</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-mode="file"><span aria-hidden="true">↑</span> 文件</button>
+        </div>
+
+        <div id="textSource" class="source-panel">
+          <textarea id="textInput" rows="11" spellcheck="false" aria-label="文本内容" placeholder="在这里粘贴文本…"></textarea>
+          <input id="textName" class="name-input" type="text" value="input.txt" aria-label="输出文件名">
+        </div>
+
+        <div id="fileSource" class="source-panel hidden">
+          <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="选择或拖入文件">
+            <input id="fileInput" type="file" hidden>
+            <div class="upload-icon" aria-hidden="true">↑</div>
+            <strong>拖入文件</strong>
+            <span>或点击选择</span>
+            <button id="chooseFileButton" class="button tertiary" type="button">选择文件</button>
+            <p id="fileMeta" class="file-meta">尚未选择</p>
+          </div>
+        </div>
+
+        <details class="options">
+          <summary><span aria-hidden="true">⚙</span> 选项</summary>
+          <div class="option-grid">
+            <label><input id="layerAOnly" type="checkbox" checked> 仅清理确定性标记</label>
+            <label><input id="detectBefore" type="checkbox"> 清理前检测</label>
+            <label><input id="detectAfter" type="checkbox"> 清理后检测</label>
+            <label><input id="keepMetadata" type="checkbox"> 保留普通元数据</label>
+          </div>
+        </details>
+
+        <div class="action-row">
+          <button id="inspectButton" class="button secondary" type="button"><span aria-hidden="true">◉</span> 检查</button>
+          <button id="detectButton" class="button secondary" type="button"><span aria-hidden="true">⌁</span> 检测</button>
+          <button id="cleanButton" class="button primary" type="button"><span aria-hidden="true">✓</span> 清理并下载</button>
+        </div>
+      </section>
+
+      <section class="card results-card" aria-labelledby="results-heading">
+        <div class="card-heading">
+          <div class="heading-icon teal" aria-hidden="true">✓</div>
+          <div><h2 id="results-heading">结果</h2><p>报告和输出</p></div>
+          <span id="resultBadge" class="status-badge muted">等待</span>
+        </div>
+        <div id="summary" class="summary empty-state">
+          <div class="empty-icon" aria-hidden="true">↓</div>
+          <p>先选择一个操作</p>
+        </div>
+        <pre id="reportOutput" class="report-output" hidden></pre>
+        <div id="cleanedPanel" class="cleaned-panel" hidden>
+          <div class="cleaned-heading"><span>清理结果</span><button id="downloadButton" class="button tertiary" type="button">下载</button></div>
+          <textarea id="cleanedText" rows="7" readonly aria-label="清理结果"></textarea>
+        </div>
+      </section>
+    </div>
+
+    <section class="card capabilities-card" aria-labelledby="capabilities-heading">
+      <div class="card-heading capability-heading">
+        <div class="heading-icon purple" aria-hidden="true">≡</div>
+        <div><h2 id="capabilities-heading">服务能力</h2><p>绿色可用 · 红色未配置</p></div>
+        <div class="legend" aria-label="能力状态"><span class="legend-good">可用</span><span class="legend-missing">未配置</span></div>
+      </div>
+      <div id="capabilities" class="capability-list">
+        <span class="capability-placeholder">加载中…</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

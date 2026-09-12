@@ -107,6 +107,7 @@ intentional.
 | `audit-website` | Audit public URLs from a same-origin sitemap |
 | `check-staged`, `clean-staged` | Check or clean repository files |
 | `hook-written-file` | Check or clean a file named by a PostToolUse payload |
+| `doctor` | Diagnose optional tools, runtimes, adapter scripts, backends, and model configuration |
 | `stealer query|build|detect` | Run the model-free black-box research workflow |
 | `download-prompts` | Download a resumable prompt corpus |
 | `serve` | Start the HTTP service on `127.0.0.1:8765` by default |
@@ -117,6 +118,21 @@ the source checkout or another directory. They still require the relevant
 third-party checkout, Python packages, model weights, or sidecar. Use
 `--upstream-scripts PATH` or `AIWR_UPSTREAM_SCRIPTS`; ordinary aiwr installs do
 not carry these dependencies.
+
+Before installing an agent skill, hook, or optional backend, run the offline
+diagnostic:
+
+```bash
+aiwr doctor --json
+```
+
+It reports `ok`, `missing`, `warning`, and `error` checks and gives
+configuration suggestions for an agent or operator. Missing optional items do
+not block the native cleaner; `aiwr doctor --strict --json` returns non-zero
+until the optional setup is complete. The doctor does not install packages,
+contact configured endpoints, or load model weights. See
+[docs/AI_AGENT_GUIDE.md](docs/AI_AGENT_GUIDE.md) and
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 ## CLI language
 
@@ -169,8 +185,11 @@ The service exposes `/health`, `/capabilities`, `/openapi.json`, `/inspect`,
 `/detect`, `/clean`, `/watermark`, and their batch counterparts. Requests use
 base64 file content; the text watermark endpoint also accepts `text`. Set
 `WATERMARKS_SERVER_API_KEY` (or `WATERMARKS_API_KEY`) before exposing the
-service beyond loopback. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the
-request shape, limits, authentication, and optional sidecars.
+service beyond loopback. By default `aiwr serve` needs no API key and listens
+only on `127.0.0.1`; open `http://127.0.0.1:8765/` for the embedded Web UI;
+see [docs/WEB_UI.md](docs/WEB_UI.md), [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md),
+and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the request shape, limits,
+authentication, and Claude Code/Grok hook workflows.
 
 The optional container image and [compose.yaml](compose.yaml) run this same Go
 binary. Compose is only a minimal native service example; it is not a research

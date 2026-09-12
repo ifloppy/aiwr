@@ -51,8 +51,11 @@ curl -sf "$WM/health"
 # {"ok": true, "version": "..."}
 ```
 
-If `WATERMARKS_SERVER_API_KEY` is set on the service, every request needs
-`-H "Authorization: Bearer $WATERMARKS_SERVICE_API_KEY"`.
+If the service was started with `WATERMARKS_SERVER_API_KEY` or
+`WATERMARKS_API_KEY`, every request needs the same key supplied by the caller,
+for example `-H "Authorization: Bearer $WATERMARKS_SERVICE_API_KEY"`. The
+`WATERMARKS_SERVICE_API_KEY` name is only a convenient client-side variable;
+the service does not read or copy it automatically.
 
 ### Capabilities
 
@@ -86,7 +89,10 @@ field and writes it to the output path itself.
 `/clean` and `/inspect` route by the uploaded `name` extension plus the bytes;
 unrecognized formats answer `kind: "unknown"` (`/inspect`) or 400 (`/clean`).
 When writing a temp file for pasted text, keep a known extension (`.txt` /
-`.md`) in the `name` you send.
+`.md`) in the `name` you send. If the service was started with
+`WATERMARKS_SERVER_API_KEY` or `WATERMARKS_API_KEY`, send that same value as
+`Authorization: Bearer <key>`; `WATERMARKS_SERVICE_API_KEY` is not a server
+setting and is not copied automatically.
 
 The machine-readable contract lives at `$WM/openapi.json` — plug it into any
 OpenAPI tooling (client generators, Swagger UI, editors) instead of hand-rolling

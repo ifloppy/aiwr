@@ -8,6 +8,53 @@ English version: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)。本手册是 AI agent 
 
 不要把结果描述为人类创作证明或保证检测失败。报告只说明已检测到的确定性标记和元数据；私有、密钥型和像素域标记可能残留。
 
+## 安装和诊断
+
+安装 aiwr 后，先运行离线诊断：
+
+```bash
+aiwr doctor
+aiwr doctor --json
+```
+
+agent 应使用 `--json` 的 `checks` 数组做判断。每项包含稳定的 `id`、
+`category`、`status`、`detail`，必要时还会有 `configure` 配置建议。诊断会
+检查原生核心、可选系统工具、Python 3.10+、command hook 所需的 Node.js、
+适配器脚本、已配置的 backend 目录和 URL、密钥以及 Layer B 模型设置。
+它不会安装软件、访问 HTTP endpoint、加载模型权重，也不会发送用户内容。
+
+状态含义如下：
+
+- `ok`：本地前置条件通过检查；
+- `missing`：可选工具或配置尚未提供；
+- `warning`：配置存在，但离线诊断无法验证 endpoint、软件包或模型是否真的可用；
+- `error`：已配置的路径/值无效，或本地探测失败。
+
+`ready=true` 表示原生核心可用。普通 `doctor` 在没有“已配置但错误”的项目时
+返回 0，即使可选项目缺失；需要完整可选栈时使用：
+
+```bash
+aiwr doctor --strict --json
+```
+
+`--strict` 在存在任何 `missing`、`warning` 或 `error` 时返回 1。安装依赖或
+修改环境变量后应重新运行 doctor，再重试 agent 集成。不要仅因为输出了
+`configure` 就直接执行安装器、`sudo` 或远程健康检查；先获得用户授权，并遵循
+所选工具自己的安装说明。
+
+仓库内 agent 集成建议按以下顺序安装：
+
+1. 运行 `aiwr doctor --json` 并保留报告；
+2. 安装所需的 agent skill/plugin；使用 Claude Code 时运行
+   `make plugin-validate` 校验 plugin；
+3. 使用 `hooks/run_hook.js` 时，确认 Node.js 和 Python 3.10+ 通过检查；
+4. 按 [INTEGRATIONS.zh-CN.md](INTEGRATIONS.zh-CN.md) 的示例发送模拟
+   `PostToolUse` payload；
+5. 再次运行 doctor，并报告仍存在的可选缺口。
+
+缺少可选 backend 不会阻止原生 inspect/clean 流程；服务端未配置 Layer B 时，
+确定性清理应使用 `options.layer_a_only=true`。
+
 ## 标准流程
 
 单文件：
@@ -46,7 +93,7 @@ CLI 默认英语。`AIWR_LANG`/`AIWR_LANGUAGE` 优先，其次是 `LC_ALL`、`LC
 | 退出码 | 含义 | agent 行为 |
 | --- | --- | --- |
 | 0 | 完成且无可操作残留 | 报告输出路径和简要结果 |
-| 1 | 发现命中/残留，或可选后端不可用 | 读取 JSON，列出命中、残留或降级 |
+| 1 | 发现命中/残留，或已配置 backend 无效；`doctor --strict` 在可选配置不完整时也返回 1 | 读取 JSON，列出命中、残留、降级或配置错误 |
 | 2 | 参数错误、拒绝、单文件不支持或 sitemap 失败 | 修正参数或询问用户，不要原样重复 |
 | 3 | 批处理或目录存在部分失败 | 保留成功输出并逐项报告错误 |
 | 130 | 用户中断 | 保留原文件/checkpoint，询问是否继续 |

@@ -75,11 +75,20 @@ printf 'hello\u200bworld\n' | aiwr clean-text -
 | `audit-website` | 从同源 sitemap 审计公共 URL |
 | `check-staged`、`clean-staged` | 检查或清理仓库文件 |
 | `hook-written-file` | 根据 PostToolUse payload 检查或清理文件 |
+| `doctor` | 诊断可选工具、运行时、适配器脚本、backend 和模型配置 |
 | `stealer query|build|detect` | 无模型依赖的黑盒研究流水线 |
 | `download-prompts` | 下载可恢复的 prompt corpus |
 | `serve` | 默认在 `127.0.0.1:8765` 启动 HTTP 服务 |
 
 `score-synthid`、`markdiffusion`、`clean-ctrlregen`、`detect-text-watermark` 等可选研究命令会调用源码 checkout 或其它目录中的适配器脚本，但仍需要相应第三方 checkout、Python 包、模型权重或 sidecar。可用 `--upstream-scripts PATH` 或 `AIWR_UPSTREAM_SCRIPTS` 指定；普通 aiwr 安装不携带这些依赖。
+
+安装 agent skill、hook 或可选 backend 前，先运行离线诊断：
+
+```bash
+aiwr doctor --json
+```
+
+它会报告 `ok`、`missing`、`warning` 和 `error`，并为 agent 或操作者提供配置建议。可选项目缺失不影响原生清理；需要完整可选环境时使用 `aiwr doctor --strict --json`，配置未完成会返回非零。doctor 不会安装软件包、访问已配置 endpoint 或加载模型权重。详见 [docs/AI_AGENT_GUIDE.zh-CN.md](docs/AI_AGENT_GUIDE.zh-CN.md) 和 [docs/INTEGRATIONS.zh-CN.md](docs/INTEGRATIONS.zh-CN.md)。
 
 ## CLI 语言
 
@@ -111,7 +120,7 @@ aiwr inspect --json input.cleaned.md > after.json || test $? -eq 1
 
 ## HTTP API 和开发
 
-服务提供 `/health`、`/capabilities`、`/openapi.json`、`/inspect`、`/detect`、`/clean`、`/watermark` 及批量接口。文件内容使用 base64；文本 watermark 接口也接受 `text`。对外暴露前请设置 `WATERMARKS_SERVER_API_KEY` 或 `WATERMARKS_API_KEY`。请求格式、限制、鉴权和 sidecar 见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
+服务提供 `/health`、`/capabilities`、`/openapi.json`、`/inspect`、`/detect`、`/clean`、`/watermark` 及批量接口。文件内容使用 base64；文本 watermark 接口也接受 `text`。默认 `aiwr serve` 不需要 API key，只监听 `127.0.0.1`。打开 `http://127.0.0.1:8765/` 可使用内置 Web UI；如需对外暴露，再设置 `WATERMARKS_SERVER_API_KEY` 或 `WATERMARKS_API_KEY`。Web UI、集成、Claude Code/Grok hook 见 [docs/WEB_UI.zh-CN.md](docs/WEB_UI.zh-CN.md)、[docs/INTEGRATIONS.zh-CN.md](docs/INTEGRATIONS.zh-CN.md) 和 [docs/USER_GUIDE.zh-CN.md](docs/USER_GUIDE.zh-CN.md)。
 
 可选容器镜像和 [compose.yaml](compose.yaml) 运行同一个 Go binary。Compose 只是最小 native 服务示例，不是 research stack，不会构建或拉取 MarkLLM、MarkDiffusion、CtrlRegen 或 SynthID runtime。目前正式发布到 GHCR 的容器镜像仅面向 `linux/amd64`；原生归档和系统包仍提供 arm64。核心镜像故意不包含 Python/ML runtime；适配器应使用操作者维护的主机环境或第三方 sidecar/service。
 

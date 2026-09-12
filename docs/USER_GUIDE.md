@@ -97,11 +97,13 @@ Token-sampling watermarks cannot generally be removed by deleting a character.
 ```bash
 aiwr rewrite-text draft.txt --prompt-only
 
-AIWR_REWRITE_PROVIDER=ollama AIWR_REWRITE_MODEL=llama3.2 \
-  aiwr rewrite-text draft.txt --output draft.rewritten.txt
+aiwr rewrite-text draft.txt --provider ollama --model llama3.2 \
+  --base-url http://127.0.0.1:11434/api/chat --output draft.rewritten.txt
 
-AIWR_REWRITE_PROVIDER=openai-compatible OPENAI_API_KEY=... \
-  aiwr rewrite-text draft.txt --allow-remote --output draft.rewritten.txt
+OPENAI_API_KEY=... aiwr rewrite-text draft.txt \
+  --provider openai-compatible --model gpt-4o-mini \
+  --base-url https://api.openai.com/v1/chat/completions \
+  --allow-remote --output draft.rewritten.txt
 ```
 
 Remote endpoints receive the source text; confirm privacy and authorization
@@ -147,6 +149,22 @@ In particular, aiwr integrates optional MarkLLM and MarkDiffusion backends but
 does not reimplement or redistribute their ML runtimes. Missing backends are
 reported as unavailable.
 
+Before installing an optional adapter or agent hook, use the offline doctor:
+
+```bash
+aiwr doctor --json
+```
+
+It checks the native core, system tools, Python 3.10+, Node.js, adapter
+scripts, backend paths/URLs, credentials, and Layer B settings. `missing` means
+optional setup is absent, `warning` means it is configured but not verified
+offline, and `error` means a configured value or local probe failed. The normal
+exit code remains 0 when only optional items are missing; use
+`aiwr doctor --strict --json` as a prerequisite gate for a complete optional
+stack. Doctor never installs dependencies, contacts endpoints, or loads models.
+Follow [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md) and
+[INTEGRATIONS.md](INTEGRATIONS.md) for authorization and installation steps.
+
 ## 7. Website auditing
 
 Use this only after explicit authorization to access the website:
@@ -181,6 +199,14 @@ WATERMARKS_SERVER_API_KEY=change-me aiwr serve
 curl -H 'Authorization: Bearer change-me' \
   http://127.0.0.1:8765/capabilities
 ```
+
+By default, `aiwr serve` needs no API key and listens only on
+`127.0.0.1:8765`. Open `http://127.0.0.1:8765/` for the embedded browser
+workbench. It supports text/file input, inspect/detect/clean, capability
+reporting, and downloading a new cleaned output. The normal local UI uses the
+default no-key service. See [WEB_UI.md](WEB_UI.md) for the UI behavior and
+[INTEGRATIONS.md](INTEGRATIONS.md) for Claude Code, Grok, Cursor, and generic
+command-hook workflows.
 
 The service provides `/health`, `/capabilities`, `/openapi.json`, `/inspect`,
 `/detect`, `/clean`, `/watermark`, and batch variants. File requests use

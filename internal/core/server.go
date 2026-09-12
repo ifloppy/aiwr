@@ -69,7 +69,9 @@ func detectionField(values []any) *[]any {
 var errAPIRequestTooLarge = errors.New("request body exceeds configured limit")
 
 // NewHTTPHandler returns the HTTP API handler. If apiKey is non-empty, every
-// endpoint, including /health, requires Authorization: Bearer <apiKey>.
+// API endpoint, including /health, requires Authorization: Bearer <apiKey>.
+// The embedded browser UI remains available at / so it can collect the key
+// without putting it in the URL.
 func NewHTTPHandler(apiKey string) http.Handler {
 	if strings.TrimSpace(apiKey) == "" {
 		apiKey = strings.TrimSpace(os.Getenv("WATERMARKS_SERVER_API_KEY"))
@@ -96,6 +98,10 @@ func NewHTTPHandler(apiKey string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if knownWebUIPath(r.URL.Path) {
+			serveWebUI(w, r)
 			return
 		}
 		if !s.authorized(r) {
@@ -245,6 +251,7 @@ func (s *apiServer) capabilities(w http.ResponseWriter, r *http.Request) {
 		"text_generators":  map[string]bool{"synthid_http": synthidText, "markllm": strings.TrimSpace(os.Getenv("MARKLLM_DIR")) != ""},
 		"harnesses":        map[string]bool{"markllm": markllm},
 		"rewrite_backends": map[string]bool{"print-prompt": true, "ollama": true, "openai-compatible": true, "mlm": externalAdapterAvailable("rewrite_text.py", configured)},
+		"web_ui":           map[string]any{"path": "/", "same_origin": true},
 		"endpoints":        []string{"/health", "/capabilities", "/openapi.json", "/inspect", "/detect", "/clean", "/inspect/batch", "/detect/batch", "/clean/batch", "/watermark", "/watermark/batch"},
 	})
 }
@@ -260,6 +267,16 @@ func (s *apiServer) openapi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	paths := map[string]any{
+		"/": map[string]any{"get": map[string]any{
+			"summary":  "browser workbench",
+			"security": []any{},
+			"responses": map[string]any{"200": map[string]any{
+				"description": "embedded HTML user interface",
+				"content": map[string]any{"text/html": map[string]any{
+					"schema": map[string]any{"type": "string"},
+				}},
+			}},
+		}},
 		"/health":          map[string]any{"get": map[string]any{"summary": "liveness and version", "responses": apiResponses("healthy")}},
 		"/capabilities":    map[string]any{"get": map[string]any{"summary": "available tools and backends", "responses": apiResponses("capabilities")}},
 		"/inspect":         apiPostOperation("inspect file; body.file is base64", "inspection report"),

@@ -48,6 +48,53 @@ If no release artifact matches the platform, report that fact and offer the
 documented Go or nFPM build path. Do not silently install Go, nFPM, models, or
 system tools as a side effect of a cleaning request.
 
+### Diagnose an installation
+
+Use the offline doctor before installing an optional agent integration or
+backend:
+
+    aiwr doctor
+    aiwr doctor --json
+
+`--json` is the stable interface for an agent. The report contains `checks`
+with an `id`, `category`, `status`, `detail`, and, when useful, `configure`
+suggestions. It checks the bundled native core, optional system commands,
+Python 3.10+, Node.js for command hooks, adapter scripts, configured backend
+directories and URLs, keys, and Layer B model settings. It does not install
+packages, contact HTTP endpoints, load model weights, or send user content.
+
+Statuses have distinct meanings:
+
+- `ok`: the local prerequisite passed its probe;
+- `missing`: an optional tool or setting is not configured;
+- `warning`: configuration exists but the offline doctor cannot verify the
+  endpoint, package, or model runtime;
+- `error`: a configured path/value is invalid or a local probe failed.
+
+The native core is ready when `ready` is true. The normal doctor exit code is
+0 when there are no configured errors, even if optional checks are missing;
+use `aiwr doctor --strict --json` when a complete optional stack is required.
+Strict mode returns 1 for any missing, warning, or error check. After an
+operator installs a dependency or changes an environment variable, run the
+doctor again and only then retry the integration. Do not run an installer,
+`sudo`, or a remote health check solely because a `configure` suggestion was
+printed; obtain the user's authorization and follow the selected tool's own
+installation instructions.
+
+For the repository's agent integrations, the usual order is:
+
+1. run `aiwr doctor --json` and retain the report;
+2. install the desired agent skill/plugin and validate it with
+   `make plugin-validate` when using Claude Code;
+3. ensure Node.js and Python 3.10+ pass when using `hooks/run_hook.js`;
+4. run a synthetic `PostToolUse` payload in `docs/INTEGRATIONS.md`;
+5. rerun the doctor and report any remaining optional gaps.
+
+See [INTEGRATIONS.md](INTEGRATIONS.md) for Claude Code, Grok, Cursor, and
+generic command-hook installation commands. A missing optional backend does
+not prevent the native inspect/clean workflow; choose `layer_a_only` for
+deterministic server-side cleaning when Layer B is not configured.
+
 ## 3. Standard decision flow
 
 ### One file
@@ -128,7 +175,7 @@ sending original text to a remote endpoint.
 | Exit code | Meaning | Agent action |
 | --- | --- | --- |
 | 0 | Completed with no actionable residual | Report output paths and a short result |
-| 1 | A hit/residual was found, or an optional backend is unavailable | Read JSON and list the hit, residual, or degradation |
+| 1 | A hit/residual was found, or a configured backend is invalid; `doctor --strict` also uses 1 for incomplete optional setup | Read JSON and list the hit, residual, degradation, or configuration error |
 | 2 | Invalid arguments, refusal, unsupported single file, or sitemap failure | Correct arguments or ask the user; do not repeat unchanged |
 | 3 | A batch or directory contains partial failures | Keep successful outputs and report each error |
 | 130 | User interrupted the operation | Preserve originals/checkpoints and ask whether to continue |
