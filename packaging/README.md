@@ -27,8 +27,8 @@ ExifTool.
 
 Useful overrides:
 
-    VERSION=0.1.0 TARGET_GOARCH=amd64 make package-deb
-    VERSION=0.1.0 TARGET_GOARCH=arm64 make package-all
+    VERSION=0.2.0 TARGET_GOARCH=amd64 make package-deb
+    VERSION=0.2.0 TARGET_GOARCH=arm64 make package-all
     NFPM=/path/to/nfpm bash scripts/package-nfpm.sh all
 
 The script accepts deb, rpm, apk, archlinux, or all. TARGET_GOARCH follows Go
@@ -40,10 +40,10 @@ package manager's naming convention.
 Use the package manager native to the target distribution and select the exact
 artifact produced in dist:
 
-    sudo apt install ./dist/aiwr_0.1.0_amd64.deb
-    sudo dnf install ./dist/aiwr_0.1.0_amd64.rpm
-    sudo pacman -U ./dist/aiwr_0.1.0_amd64.pkg.tar.zst
-    sudo apk add --allow-untrusted ./dist/aiwr_0.1.0_amd64.apk
+    sudo apt install ./dist/aiwr_0.2.0_amd64.deb
+    sudo dnf install ./dist/aiwr_0.2.0_amd64.rpm
+    sudo pacman -U ./dist/aiwr_0.2.0_amd64.pkg.tar.zst
+    sudo apk add --allow-untrusted ./dist/aiwr_0.2.0_amd64.apk
 
 The APK command needs a trusted repository or an explicit local-package policy
 on systems that reject unsigned local APKs. For production repositories, sign
@@ -52,7 +52,7 @@ policy.
 
 ## GitHub releases
 
-Pushing a tag such as v0.1.0 triggers .github/workflows/release.yml. The
+Pushing a tag such as v0.2.0 triggers .github/workflows/release.yml. The
 GoReleaser configuration:
 
 - builds static Linux, macOS, and Windows archives for amd64, arm64, and armv7;
