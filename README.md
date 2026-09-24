@@ -57,7 +57,7 @@ The core module only needs the Unicode support dependency declared in `go.mod`.
 
 ```bash
 go build -trimpath -o aiwr ./cmd/aiwr
-go install github.com/ifloppy/aiwr/cmd/aiwr@main
+go install github.com/ifloppy/aiwr/cmd/aiwr@latest
 
 go test ./...
 go vet ./...

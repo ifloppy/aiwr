@@ -17,7 +17,7 @@ import (
 	"unicode/utf8"
 )
 
-var Version = "0.1.0"
+var Version = "0.2.0"
 
 func serverVersion() string {
 	if version := strings.TrimSpace(os.Getenv("WATERMARKS_SERVER_VERSION")); version != "" {

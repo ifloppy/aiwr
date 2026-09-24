@@ -30,7 +30,7 @@ Go binary 和常规安装包包含确定性清理器、Unicode/元数据检查�
 
 ```bash
 go build -trimpath -o aiwr ./cmd/aiwr
-go install github.com/ifloppy/aiwr/cmd/aiwr@main
+go install github.com/ifloppy/aiwr/cmd/aiwr@latest
 go test ./...
 go vet ./...
 ./aiwr version
