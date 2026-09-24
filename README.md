@@ -51,12 +51,13 @@ reported as unavailable; it is never downloaded automatically.
 
 ## Install and verify
 
-Go 1.25 or newer is required for a source build. The core module only needs
-the Unicode support dependency declared in `go.mod`.
+Go 1.26 or newer is required for a source build. Prebuilt archives and packages
+are available from [GitHub Releases](https://github.com/ifloppy/aiwr/releases/latest).
+The core module only needs the Unicode support dependency declared in `go.mod`.
 
 ```bash
 go build -trimpath -o aiwr ./cmd/aiwr
-go install github.com/iruanp/aiwr/cmd/aiwr@latest
+go install github.com/ifloppy/aiwr/cmd/aiwr@latest
 
 go test ./...
 go vet ./...
@@ -84,6 +85,9 @@ aiwr clean draft.txt --in-place
 # Clean text from stdin.
 printf 'hello\u200bworld\n' | aiwr clean-text -
 ```
+
+To use the local Web UI, run `aiwr serve` and open
+`http://127.0.0.1:8765/` in your browser.
 
 The default destination is new: `NAME.cleaned.EXT` for a file and
 `DIRECTORY.cleaned` for a directory. Unknown files are not silently treated

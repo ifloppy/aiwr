@@ -25,11 +25,12 @@ Go binary 和常规安装包包含确定性清理器、Unicode/元数据检查�
 
 ## 安装和验证
 
-源码构建需要 Go 1.25 或更新版本：
+源码构建需要 Go 1.26 或更新版本。预编译归档和系统包可从
+[GitHub Releases](https://github.com/ifloppy/aiwr/releases/latest) 下载。
 
 ```bash
 go build -trimpath -o aiwr ./cmd/aiwr
-go install github.com/iruanp/aiwr/cmd/aiwr@latest
+go install github.com/ifloppy/aiwr/cmd/aiwr@latest
 go test ./...
 go vet ./...
 ./aiwr version
@@ -55,6 +56,9 @@ aiwr clean draft.txt --in-place
 # 清理 stdin 文本
 printf 'hello\u200bworld\n' | aiwr clean-text -
 ```
+
+如需使用本地 Web UI，运行 `aiwr serve`，然后在浏览器打开
+`http://127.0.0.1:8765/`。
 
 默认输出是新目标：文件为 `NAME.cleaned.EXT`，目录为 `DIRECTORY.cleaned`。未知文件不会被静默当作文本处理；只有确定这种解释正确时才使用 `--as` 或 `--force-text`。
 

@@ -26,10 +26,10 @@ func forcedKind(opts Options, path string, data []byte) (Kind, error) {
 			return KindUnknown, fmt.Errorf("invalid forced type %q", opts.ForceType)
 		}
 	}
-	kind, _ := Classify(path)
-	if kind == KindUnknown {
-		kind = classifyBytes(data, filepath.Ext(path))
-	}
+	// Byte-oriented callers (including HTTP requests) supply a display name,
+	// not a trusted local path. Classify the bytes already in hand instead of
+	// opening a same-named file on the server.
+	kind := classifyBytes(data, filepath.Ext(path))
 	if kind == KindUnknown && (opts.ForceText) {
 		return KindText, nil
 	}

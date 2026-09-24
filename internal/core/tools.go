@@ -53,11 +53,9 @@ func inspectOptionalToolsWithOptions(path string, data []byte, includeExiftool b
 }
 
 func materializeProbeInput(name string, data []byte) (string, func(), error) {
-	if name != "" {
-		if st, err := os.Lstat(name); err == nil && st.Mode().IsRegular() {
-			return name, func() {}, nil
-		}
-	}
+	// Always inspect the bytes supplied by the caller. `name` can come from an
+	// HTTP request, so treating it as a local path could make a remote filename
+	// select an unrelated file on the server.
 	ext := filepath.Ext(name)
 	if len(ext) > 12 || strings.ContainsAny(ext, "/\\") {
 		ext = ""
