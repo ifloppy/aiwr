@@ -51,12 +51,13 @@ reported as unavailable; it is never downloaded automatically.
 
 ## Install and verify
 
-Go 1.25 or newer is required for a source build. The core module only needs
-the Unicode support dependency declared in `go.mod`.
+Go 1.26 or newer is required for a source build. Prebuilt archives and packages
+are available from [GitHub Releases](https://github.com/ifloppy/aiwr/releases/latest).
+The core module only needs the Unicode support dependency declared in `go.mod`.
 
 ```bash
 go build -trimpath -o aiwr ./cmd/aiwr
-go install github.com/iruanp/aiwr/cmd/aiwr@latest
+go install github.com/ifloppy/aiwr/cmd/aiwr@main
 
 go test ./...
 go vet ./...
@@ -85,6 +86,9 @@ aiwr clean draft.txt --in-place
 printf 'hello\u200bworld\n' | aiwr clean-text -
 ```
 
+To use the local Web UI, run `aiwr serve` and open
+`http://127.0.0.1:8765/` in your browser.
+
 The default destination is new: `NAME.cleaned.EXT` for a file and
 `DIRECTORY.cleaned` for a directory. Unknown files are not silently treated
 as text. Use `--as` or `--force-text` only when that interpretation is
@@ -107,6 +111,7 @@ intentional.
 | `audit-website` | Audit public URLs from a same-origin sitemap |
 | `check-staged`, `clean-staged` | Check or clean repository files |
 | `hook-written-file` | Check or clean a file named by a PostToolUse payload |
+| `doctor` | Diagnose optional tools, runtimes, adapter scripts, backends, and model configuration |
 | `stealer query|build|detect` | Run the model-free black-box research workflow |
 | `download-prompts` | Download a resumable prompt corpus |
 | `serve` | Start the HTTP service on `127.0.0.1:8765` by default |
@@ -117,6 +122,21 @@ the source checkout or another directory. They still require the relevant
 third-party checkout, Python packages, model weights, or sidecar. Use
 `--upstream-scripts PATH` or `AIWR_UPSTREAM_SCRIPTS`; ordinary aiwr installs do
 not carry these dependencies.
+
+Before installing an agent skill, hook, or optional backend, run the offline
+diagnostic:
+
+```bash
+aiwr doctor --json
+```
+
+It reports `ok`, `missing`, `warning`, and `error` checks and gives
+configuration suggestions for an agent or operator. Missing optional items do
+not block the native cleaner; `aiwr doctor --strict --json` returns non-zero
+until the optional setup is complete. The doctor does not install packages,
+contact configured endpoints, or load model weights. See
+[docs/AI_AGENT_GUIDE.md](docs/AI_AGENT_GUIDE.md) and
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 ## CLI language
 
@@ -169,8 +189,11 @@ The service exposes `/health`, `/capabilities`, `/openapi.json`, `/inspect`,
 `/detect`, `/clean`, `/watermark`, and their batch counterparts. Requests use
 base64 file content; the text watermark endpoint also accepts `text`. Set
 `WATERMARKS_SERVER_API_KEY` (or `WATERMARKS_API_KEY`) before exposing the
-service beyond loopback. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the
-request shape, limits, authentication, and optional sidecars.
+service beyond loopback. By default `aiwr serve` needs no API key and listens
+only on `127.0.0.1`; open `http://127.0.0.1:8765/` for the embedded Web UI;
+see [docs/WEB_UI.md](docs/WEB_UI.md), [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md),
+and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the request shape, limits,
+authentication, and Claude Code/Grok hook workflows.
 
 The optional container image and [compose.yaml](compose.yaml) run this same Go
 binary. Compose is only a minimal native service example; it is not a research

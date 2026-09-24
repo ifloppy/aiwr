@@ -187,6 +187,7 @@ func localizedFlagDescription(english string) string {
 		"API key (prefer OPENAI_API_KEY)":                                                   "API key（优先使用 OPENAI_API_KEY）",
 		"API key (or WATERMARKS_STEAL_API_KEY)":                                             "API key（或 WATERMARKS_STEAL_API_KEY）",
 		"query backend: dry-run or openai-compatible":                                       "查询后端：dry-run 或 openai-compatible",
+		"return 1 when optional checks are missing or unverified":                           "当可选检查缺失或未验证时返回 1",
 		"watermark key (prefer WATERMARKS_GUMBEL_KEY)":                                      "水印 key（优先使用 WATERMARKS_GUMBEL_KEY）",
 		"add-alpha smoothing":                                                               "add-alpha 平滑",
 		"override context length (0 uses the scorer value)":                                 "覆盖上下文长度（0 使用评分器的值）",

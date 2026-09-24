@@ -25,7 +25,7 @@ COPY internal ./internal
 COPY config ./config
 
 RUN CGO_ENABLED=0 go build -trimpath \
-    -ldflags="-s -w -X github.com/iruanp/aiwr/internal/core.Version=${VERSION}" \
+    -ldflags="-s -w -X github.com/ifloppy/aiwr/internal/core.Version=${VERSION}" \
     -o /out/aiwr ./cmd/aiwr
 
 FROM debian:bookworm-slim

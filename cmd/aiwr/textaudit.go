@@ -1,6 +1,6 @@
 package main
 
-import "github.com/iruanp/aiwr/internal/core"
+import "github.com/ifloppy/aiwr/internal/core"
 
 func makeTextAuditReport(report core.FileReport, path string) map[string]any {
 	flagged := []any{}

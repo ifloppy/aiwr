@@ -6,7 +6,7 @@ version_schema: semver
 maintainer: aiwr contributors <maintainers@aiwr.invalid>
 description: Inspect and clean AI watermark and provenance metadata
 vendor: aiwr contributors
-homepage: https://github.com/iruanp/aiwr
+homepage: https://github.com/ifloppy/aiwr
 license: MIT
 section: utils
 priority: optional

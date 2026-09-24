@@ -46,7 +46,7 @@ export VERSION="$version" NFPM_ARCH="$nfpm_arch" SOURCE_DATE_EPOCH
 mkdir -p "$repo_root/dist/nfpm"
 GOOS=linux GOARCH="$target_goarch" CGO_ENABLED=0 \
     "$go_bin" build -trimpath \
-    -ldflags="-s -w -X github.com/iruanp/aiwr/internal/core.Version=$version" \
+    -ldflags="-s -w -X github.com/ifloppy/aiwr/internal/core.Version=$version" \
     -o "$repo_root/dist/nfpm/aiwr" "$repo_root/cmd/aiwr"
 
 cd "$repo_root"

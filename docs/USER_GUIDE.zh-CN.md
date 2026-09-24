@@ -67,11 +67,13 @@ token 采样型水印通常不能靠删除字符移除。`rewrite-text` 默认�
 ```bash
 aiwr rewrite-text draft.txt --prompt-only
 
-AIWR_REWRITE_PROVIDER=ollama AIWR_REWRITE_MODEL=llama3.2 \
-  aiwr rewrite-text draft.txt --output draft.rewritten.txt
+aiwr rewrite-text draft.txt --provider ollama --model llama3.2 \
+  --base-url http://127.0.0.1:11434/api/chat --output draft.rewritten.txt
 
-AIWR_REWRITE_PROVIDER=openai-compatible OPENAI_API_KEY=... \
-  aiwr rewrite-text draft.txt --allow-remote --output draft.rewritten.txt
+OPENAI_API_KEY=... aiwr rewrite-text draft.txt \
+  --provider openai-compatible --model gpt-4o-mini \
+  --base-url https://api.openai.com/v1/chat/completions \
+  --allow-remote --output draft.rewritten.txt
 ```
 
 远程 endpoint 会接触原文，使用 `--allow-remote` 前确认隐私与授权。重写后检查事实、数字、代码、引用和格式；结果是 best-effort，不能证明人类创作，也不保证检测器结果。
@@ -100,6 +102,20 @@ aiwr download-prompts --dataset allenai/c4 --config realnewslike \
 `score-synthid`、`synthid-score-server`、`synthid-text-server`、`detect-text-watermark`、`markdiffusion`、`clean-ctrlregen` 和 `bench-synthid-text` 是可选适配器，不是 aiwr 内置的算法。源码 checkout 包含适配器脚本；安装后的 binary 必须通过 `--upstream-scripts PATH` 或 `AIWR_UPSTREAM_SCRIPTS` 显式指定适配器目录。操作者还必须自行安装/配置所选适配器需要的第三方 checkout、Python 环境、模型或 sidecar。适配器不会自动下载代码、权重、Torch、Transformers 或 Diffusers。
 
 特别是，aiwr 可以接入 MarkLLM 和 MarkDiffusion，但不重实现或重新发行它们的 ML runtime。缺少 backend 时会报告 unavailable。
+
+安装可选适配器或 agent hook 前，可以先运行离线诊断：
+
+```bash
+aiwr doctor --json
+```
+
+它会检查原生核心、系统工具、Python 3.10+、Node.js、适配器脚本、backend
+路径/URL、凭据和 Layer B 设置。`missing` 表示可选配置缺失，`warning` 表示
+已有配置但离线无法验证，`error` 表示已配置的值或本地探测失败。仅有可选项目
+缺失时普通 doctor 仍返回 0；需要将完整可选栈作为前置条件时使用
+`aiwr doctor --strict --json`。doctor 不会安装依赖、访问 endpoint 或加载模型。
+授权和安装步骤见 [AI_AGENT_GUIDE.zh-CN.md](AI_AGENT_GUIDE.zh-CN.md) 与
+[INTEGRATIONS.zh-CN.md](INTEGRATIONS.zh-CN.md)。
 
 ## 7. 网站审计
 
@@ -130,6 +146,14 @@ WATERMARKS_SERVER_API_KEY=change-me aiwr serve
 curl -H 'Authorization: Bearer change-me' \
   http://127.0.0.1:8765/capabilities
 ```
+
+默认 `aiwr serve` 不需要 API key，只监听 `127.0.0.1:8765`。打开
+`http://127.0.0.1:8765/` 可使用内置浏览器工作台，支持文本/文件输入、
+inspect/detect/clean、能力展示和下载新的清理结果。普通本机使用采用无 key 的
+默认服务；如启用鉴权，请使用 API 客户端发送 bearer header。UI 行为见
+[WEB_UI.zh-CN.md](WEB_UI.zh-CN.md)；Claude
+Code、Grok、Cursor 和通用 command hook 流程见
+[INTEGRATIONS.zh-CN.md](INTEGRATIONS.zh-CN.md)。
 
 服务提供 `/health`、`/capabilities`、`/openapi.json`、`/inspect`、`/detect`、`/clean`、`/watermark` 和批量接口。文件使用 base64，`/watermark` 也接受文本；默认只监听 loopback，对外提供前请配置鉴权。
 

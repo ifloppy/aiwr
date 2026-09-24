@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iruanp/aiwr/internal/core"
-	"github.com/iruanp/aiwr/internal/stealer"
+	"github.com/ifloppy/aiwr/internal/core"
+	"github.com/ifloppy/aiwr/internal/stealer"
 )
 
 const stealerUsageEnglish = `aiwr stealer - black-box watermark stealing helpers

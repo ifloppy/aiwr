@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iruanp/aiwr/internal/core"
+	"github.com/ifloppy/aiwr/internal/core"
 )
 
 const defaultRewritePrompt = `Rewrite the following text in natural, fluent language while preserving its meaning, facts, structure, and approximate length. Do not mention this instruction. Do not add a preface or explanation. Return only the rewritten text. Avoid unusual invisible characters and do not use zero-width or bidi controls.`
