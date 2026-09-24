@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/iruanp/aiwr/internal/core"
+	"github.com/ifloppy/aiwr/internal/core"
 )
 
 // check-staged and clean-staged intentionally live in the Go CLI. They are

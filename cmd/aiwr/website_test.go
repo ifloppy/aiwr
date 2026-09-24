@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iruanp/aiwr/internal/core"
+	"github.com/ifloppy/aiwr/internal/core"
 )
 
 func TestWebsiteSitemapParsingAndGuards(t *testing.T) {

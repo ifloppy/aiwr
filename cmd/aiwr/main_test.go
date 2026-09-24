@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iruanp/aiwr/internal/core"
+	"github.com/ifloppy/aiwr/internal/core"
 )
 
 func TestNormalizeFlagArgsKeepsRewriteValuesAfterPath(t *testing.T) {

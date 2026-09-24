@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/iruanp/aiwr/internal/core"
+	"github.com/ifloppy/aiwr/internal/core"
 )
 
 const usageEnglish = `aiwr - inspect and remove AI watermark/provenance metadata

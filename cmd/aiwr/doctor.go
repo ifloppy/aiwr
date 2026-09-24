@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iruanp/aiwr/internal/core"
+	"github.com/ifloppy/aiwr/internal/core"
 )
 
 // doctorCheck is deliberately a small, stable JSON contract. External
