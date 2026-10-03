@@ -63,4 +63,4 @@ adapter 目录和外部维护的环境。
 4. 同步 PR 记录已对齐、降级和待移植行为。
 5. release 前运行 `go test ./...`、`go vet ./...`、`make smoke` 和目录/reflink/HTTP smoke。
 
-`upstream_head: 81d808d5d71bb22a02b1bdc3df293a2d93422778`
+`upstream_head: 1181fd4e8cc581931a5ee672697a646721e92c78`
