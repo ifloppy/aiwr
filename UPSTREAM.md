@@ -87,4 +87,4 @@ and externally managed environment.
    directory/reflink/HTTP smoke checks. Do not publish third-party backend
    images as aiwr artifacts.
 
-upstream_head: 81d808d5d71bb22a02b1bdc3df293a2d93422778
+upstream_head: 5c180932a00c793261177f79aee21db8929f3fe2
